@@ -20,7 +20,7 @@ A string within the target block, like a paragraph tag (`<p>`), is used to
 identify where to insert the block. A method is provided to define which
 occurrence(s) of the string to insert at, and whether to insert it before
 the string, after it, or to replace it entirely. When the target block is the
-"Main page content", it is possible to define which node types and view modes
+"Main page content", it is possible to define the node types and view modes
 that the block will be inserted into.
 
 For a full description of the project visit the project page:
