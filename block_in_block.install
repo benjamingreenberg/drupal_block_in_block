@@ -1,0 +1,74 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the block_in_block module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function block_in_block_schema() {
+  $schema['block_in_block'] = array(
+    'description' => 'Base table for block_in_block',
+    'fields' => array(
+      'module' => array(
+        'type' => 'varchar',
+        'length' => 64,
+        'not null' => TRUE,
+        'description' => "The block's origin module, from {block}.module.",
+      ),
+      'delta' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => "The block's unique delta within module, from {block}.delta.",
+      ),
+      'enabled' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+        'size' => 'tiny',
+        'description' => "Boolean indicating whether the block is meant to be placed within another block.",
+      ),
+      'target_blocks' => array(
+        'type' => 'text',
+        'size' => 'normal',
+        'not null' => TRUE,
+        'description' => "The block(s) that this block should be inserted into (json encoded array of each target block's module-delta, keyed by theme).",
+      ),
+      'target_substring' => array(
+        'type' => 'varchar',
+        'length' => 250,
+        'not null' => TRUE,
+        'description' => "A string within the target blocks used to identify where this block's content should be inserted.",
+      ),
+      'insertion_type' => array(
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE,
+        'description' => 'How the block should be inserted ("above" the target substring, "below" it, or "replace" it).',
+      ),
+      'occurrences' => array(
+        'type' => 'varchar',
+        'length' => 250,
+        'not null' => TRUE,
+        'default' => '1',
+        'description' => "The occurrence of the target substring to use for inserting the block. Positive number for the exact occurrence, -1 for the last occurrence, and 0 all occurrences.",
+      ),
+    ),
+    'primary key' => array('module', 'delta'),
+  );
+  return $schema;
+}
+
+/**
+ * Implements hook_install().
+ */
+function block_in_block_install() {
+  db_update('system')
+    ->fields(array('weight' => 100))
+    ->condition('name', 'block_in_block', '=')
+    ->execute();
+}

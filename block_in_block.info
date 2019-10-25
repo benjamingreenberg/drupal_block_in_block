@@ -1,0 +1,6 @@
+
+name = Block in Block
+description = Adds ability to place blocks within other blocks
+package = Block in Block
+core = 7.x
+dependencies[] = block
