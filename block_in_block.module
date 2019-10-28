@@ -576,8 +576,7 @@ function block_in_block_is_duplicate_insert($content_index, &$content_indexes_us
  * Inserts placeholder(s) using a target substring as the insertion point.
  *
  * @param $content
- *   String, or array of strings, within which the insertions are to take place.
- *   If an array, the insertions will be performed on each element of the array.
+ *   String within which the insertions are to take place.
  * @param $target_substring
  *   String within the content, or each string element of the array, that
  *   identifies where the placeholders are to be inserted.
@@ -598,14 +597,7 @@ function block_in_block_insert_at_substring(&$content, $target_substring, $inser
     $insertion_group_placeholder = $insertions['insertion_group_placeholder'];
     block_in_block_store_inserted_placeholder_content($insertion_group_placeholder, $insertions['content_to_insert']);
     $replace = block_in_block_get_replace_string_for_insertion_type($insertion_type, $target_substring, $insertion_group_placeholder);
-    if (!is_array($content)) {
-      $content = str_replace($target_substring, $replace, $content);
-    }
-    else {
-      for ($i = 0; $i < count($content); $i++) {
-        $content[$i] = str_replace($target_substring, $replace, $content[$i]);
-      }
-    }
+    $content = str_replace($target_substring, $replace, $content);
   }
 }
 
