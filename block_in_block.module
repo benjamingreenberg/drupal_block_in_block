@@ -1375,7 +1375,7 @@ function block_in_block_form_block_admin_display_form_alter(&$form, &$form_state
     if (!empty($settings['target_blocks'][$theme])) {
       $target_block_key = $settings['target_blocks'][$theme]['block_key'];
       $target_block_name = $form['blocks'][$target_block_key]['info']['#markup'];
-      $block['info']['#markup'] = t('@block_name (within @target_block_name)', array('@block_name' => $block['info']['#markup'], '@target_block_name' => $target_block_name));
+      $block['info']['#markup'] .= ' ' . t('(within @target_block_name)', array('@target_block_name' => $target_block_name));
     }
   }
 }
