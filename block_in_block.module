@@ -1286,14 +1286,12 @@ function block_in_block_form_validate_target_substring($form_state) {
  * @see block_in_block_form_block_admin_configure_validate()
  */
 function block_in_block_form_validate_occurrences($form_state) {
-  $occurrences_form_value = $form_state['values']['block_in_block_occurrences'];
+  // Remove whitespace.
+  $occurrences_form_value = preg_replace('/\s+/', '', $form_state['values']['block_in_block_occurrences']);
   $invalid_occurrences = array();
   $error_message = '';
   if (!$occurrences_form_value) {
     $error_message = t('"Occurrence to insert at" field is required when inserting a block into another block.');
-  }
-  elseif (!trim($occurrences_form_value)) {
-    $error_message = t('"Occurrence to insert at" field contains only whitespace.');
   }
   else {
     $occurrences = explode(',', $occurrences_form_value);
@@ -1356,7 +1354,7 @@ function block_in_block_form_block_admin_configure_submit($form, &$form_state) {
     'target_blocks' => json_encode($form_state['values']['block_in_block_target_blocks']['themes']),
     'target_substring' => $form_state['values']['block_in_block_target_substring'],
     'insertion_type' => $form_state['values']['block_in_block_insertion_type'],
-    'occurrences' => $form_state['values']['block_in_block_occurrences'],
+    'occurrences' => preg_replace('/\s+/', '', $form_state['values']['block_in_block_occurrences']),
   ));
   $query->execute();
 }
