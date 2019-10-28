@@ -721,7 +721,7 @@ function block_in_block_insert_at_nth_occurrence($occurrence, &$content_parts, $
 
     // Note: first occurrence of the target_substring will always be at index 1.
     // @see block_in_block_explode_and_keep_delimiter() for more information.
-    for ($n = 1; !$last_index_reached; $n++) {
+    for ($n = 0; !$last_index_reached; $n++) {
       $content_index = $a * $n + ($b);
       if ($a < 0) {
         $content_index++;
