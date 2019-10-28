@@ -1315,7 +1315,7 @@ function block_in_block_form_validate_occurrences($form_state) {
     }
   }
   if ($error_message) {
-    form_set_error('block_in_block_occurrences');
+    form_set_error('block_in_block_occurrences', $error_message);
   }
 }
 
