@@ -510,7 +510,7 @@ function block_in_block_insert_at_occurrences(&$content, $target_substring, $ins
           // Negative means to begin counting from the last occurrence, forward.
           $content_index = $occurrence + count($content_parts);
         }
-        if (isset($content_parts[$content_index]) && !block_in_block_is_duplicate_insert($content_index, $content_indexes_used)) {
+        if (isset($content_parts[$content_index]) && !block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
           if (!$is_occurrence_to_exclude) {
             block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
           }
@@ -574,7 +574,7 @@ function block_in_block_explode_and_keep_delimiter($delimiter, $string) {
  * @return bool
  *   TRUE if index has been used to insert content, FALSE if not.
  */
-function block_in_block_is_duplicate_insert($content_index, &$content_indexes_used) {
+function block_in_block_has_been_inserted($content_index, &$content_indexes_used) {
   $has_been_inserted = TRUE;
   if (!in_array($content_index, $content_indexes_used)) {
     $has_been_inserted = FALSE;
@@ -712,7 +712,7 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *
  * @see block_in_block_explode_and_keep_delimiter()
  *   For more information about the $content_parts.
- * @see block_in_block_is_duplicate_insert()
+ * @see block_in_block_has_been_inserted()
  *   For more information about $content_indexes_used.
  * @see block_in_block_get_nth_occurrence_expression_parts()
  * @see block_in_block_insert_at_occurrences()
@@ -732,7 +732,7 @@ function block_in_block_insert_at_nth_occurrence($expression, &$content_parts, $
       if ($a < 0) {
         $content_index++;
       }
-      if (!block_in_block_is_duplicate_insert($content_index, $content_indexes_used)) {
+      if (!block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
         if ($content_index > 0) {
           if (isset($content_parts[$content_index])) {
             if (!$is_occurrence_to_exclude) {
