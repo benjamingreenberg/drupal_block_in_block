@@ -690,8 +690,8 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *   n+4: all occurrences after the first three (4, 5, 6, etc).
  *   4n+1: every fourth occurrence, starting at one (1, 5, 9, etc).
  *
- * @param $occurrence
- *   String containing the expression.
+ * @param $expression
+ *   String containing the nth-occurrence expression.
  * @param $content_parts
  *   Array of strings of the original content split by the target substring.
  * @param $target_substring
@@ -715,9 +715,10 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  * @see block_in_block_is_duplicate_insert()
  *   For more information about $content_indexes_used.
  * @see block_in_block_get_nth_occurrence_expression_parts()
+ * @see block_in_block_insert_at_occurrences()
  */
-function block_in_block_insert_at_nth_occurrence($occurrence, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
-  $expression_parts = block_in_block_get_nth_occurrence_expression_parts($occurrence);
+function block_in_block_insert_at_nth_occurrence($expression, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
+  $expression_parts = block_in_block_get_nth_occurrence_expression_parts($expression);
   if ($expression_parts !== FALSE) {
     $a = $expression_parts['a'];
     $b = $expression_parts['b'];
@@ -739,24 +740,20 @@ function block_in_block_insert_at_nth_occurrence($occurrence, &$content_parts, $
             }
             $content_indexes_used[] = $content_index;
           }
-          // It is possible that the current index exceeds the upper bounds of
-          // the array, but the loop should not be stopped. For example, -n+5
-          // means the first 5 occurrences. If there are only 4 occurrences,
-          // then n=0 will exceed the bounds of the array. However, n=1 will be
-          // within the bounds. So, the for loop should only be stopped at this
-          // point if the index hasn't *decreased* since the last iteration of
-          // the loop.
+          // The for loop should only be stopped at this point if the index
+          // hasn't *decreased* since the last iteration of the loop.
+          // For example, -n+5 when there are only 4 occurrences:
+          // n=0 will result in a 5, which will exceed the bounds of the array,
+          // but n=1 will result in a 4, which is valid.
           elseif ($previous_index !== FALSE && $content_index >= $previous_index) {
             $last_index_reached = TRUE;
           }
         }
-        // It is possible that the current index exceeds the negative bounds of
-        // the array, but the loop should not be stopped. For example, 4n-7
-        // is every fourth occurrence, starting with the first one. n=0 and n=1
-        // will exceed the lower bounds of the array (are negative), but n=2
-        // will be within the bounds. So, the for loop should only be stopped at
-        // this point if the index hasn't *increased* since the last iteration
-        // of the loop.
+        // The for loop should only be stopped at this point if the index
+        // hasn't *increased* since the last iteration of the loop.
+        // For example, 4n-7 is every fourth occurrence, starting with the
+        // first one. n=0 and n=1 will result in negatives/invalid indexes,
+        // but n=2 will be positive.
         elseif ($previous_index !== FALSE && $content_index <= $previous_index) {
           $last_index_reached = TRUE;
         }
