@@ -928,7 +928,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
    A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first occurrence, 2 for the second, etc).
    A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last occurrence, -2 for the second to last, etc).
    A <span class="block-in-block-occurrence-example">0</span> is all occurrences.
-   A <span class="block-in-block-occurrence-example">"nth-of-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
+   A <span class="block-in-block-occurrence-example">"nth-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
    <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered;
     <span class="block-in-block-occurrence-example">3n</span>: every third; <span class="block-in-block-occurrence-example">-n+3</span>: the first three; etc.
     Enter multiple occurrences by placing a comma between them: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence;
@@ -1348,7 +1348,7 @@ function block_in_block_form_validate_occurrences($form_state) {
 }
 
 /**
- * Determines whether a string is a valid 'nth-of-occurrence' expression.
+ * Determines whether a string is a valid 'nth-occurrence' expression.
  *
  * @param $expression
  *   String to evaluate.
@@ -1357,7 +1357,7 @@ function block_in_block_form_validate_occurrences($form_state) {
  *   TRUE if valid, FALSE otherwise.
  *
  * @see block_in_block_insert_at_nth_occurrence()
- *   For more information about nth-of-occurrence expressions.
+ *   For more information about nth-occurrence expressions.
  */
 function block_in_block_is_nth_occurrence_expression($expression) {
   $is_valid = FALSE;
