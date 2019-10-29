@@ -488,8 +488,16 @@ function block_in_block_insert_at_occurrences(&$content, $target_substring, $ins
   $content_parts = block_in_block_explode_and_keep_delimiter($target_substring, $content);
   foreach ($insertions_by_occurrences as $occurrences => $insertions_by_type) {
     $occurrences = explode(',', $occurrences);
+    // Process occurrences beginning with the negation operator ("!") first.
+    sort($occurrences);
     $content_indexes_used = array();
     foreach ($occurrences as $occurrence) {
+      $is_occurrence_to_exclude = FALSE;
+      if (strpos($occurrence, '!') === 0) {
+        $is_occurrence_to_exclude = TRUE;
+        // Strip negation operator.
+        $occurrence = substr($occurrence, 1);
+      }
       // "0" is treated as every occurrence.
       if ($occurrence == '0') {
         $occurrence = '1n';
@@ -503,12 +511,14 @@ function block_in_block_insert_at_occurrences(&$content, $target_substring, $ins
           $content_index = $occurrence + count($content_parts);
         }
         if (isset($content_parts[$content_index]) && !block_in_block_is_duplicate_insert($content_index, $content_indexes_used)) {
-          block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
+          if (!$is_occurrence_to_exclude) {
+            block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
+          }
           $content_indexes_used[] = $content_index;
         }
       }
       else {
-        block_in_block_insert_at_nth_occurrence($occurrence, $content_parts, $target_substring, $insertions_by_type, $content_indexes_used);
+        block_in_block_insert_at_nth_occurrence($occurrence, $content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
       }
     }
   }
@@ -694,8 +704,11 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *   - before: the content should be inserted before the target substring.
  *   - replace: the content should replace the target substring.
  * @param $content_indexes_used
- *   Array of integers of content_array indexes that has had a placeholder
- *   inserted into it from the current set of occurrences.
+ *   Array of indexes that the placeholder should not be inserted into, because
+ *   it has already been inserted, or is excluded from being inserted there.
+ * @param $is_occurrence_to_exclude
+ *   Boolean indicating if indexes matching the expression should be added to
+ *   $content_indexes_used without inserting the placeholder.
  *
  * @see block_in_block_explode_and_keep_delimiter()
  *   For more information about the $content_parts.
@@ -703,7 +716,7 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *   For more information about $content_indexes_used.
  * @see block_in_block_get_nth_occurrence_expression_parts()
  */
-function block_in_block_insert_at_nth_occurrence($occurrence, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used) {
+function block_in_block_insert_at_nth_occurrence($occurrence, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
   $expression_parts = block_in_block_get_nth_occurrence_expression_parts($occurrence);
   if ($expression_parts !== FALSE) {
     $a = $expression_parts['a'];
@@ -718,31 +731,35 @@ function block_in_block_insert_at_nth_occurrence($occurrence, &$content_parts, $
       if ($a < 0) {
         $content_index++;
       }
-      if ($content_index > 0) {
-        if (isset($content_parts[$content_index]) && !block_in_block_is_duplicate_insert($content_index, $content_indexes_used)) {
-          block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
-          $content_indexes_used[] = $content_index;
+      if (!block_in_block_is_duplicate_insert($content_index, $content_indexes_used)) {
+        if ($content_index > 0) {
+          if (isset($content_parts[$content_index])) {
+            if (!$is_occurrence_to_exclude) {
+              block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
+            }
+            $content_indexes_used[] = $content_index;
+          }
+          // It is possible that the current index exceeds the upper bounds of
+          // the array, but the loop should not be stopped. For example, -n+5
+          // means the first 5 occurrences. If there are only 4 occurrences,
+          // then n=0 will exceed the bounds of the array. However, n=1 will be
+          // within the bounds. So, the for loop should only be stopped at this
+          // point if the index hasn't *decreased* since the last iteration of
+          // the loop.
+          elseif ($previous_index !== FALSE && $content_index >= $previous_index) {
+            $last_index_reached = TRUE;
+          }
         }
-        // It is possible that the current index exceeds the upper bounds of the
-        // array, but the loop should not be stopped. For example, -n+5
-        // means the first 5 occurrences. If there are only 4 occurrences,
-        // then n=0 will exceed the bounds of the array. However, n=1 will be
-        // within the bounds. So, the for loop should only be stopped at this
-        // point if the index hasn't *decreased* since the last iteration of the
-        // loop.
-        elseif ($previous_index !== FALSE && $content_index >= $previous_index) {
+        // It is possible that the current index exceeds the negative bounds of
+        // the array, but the loop should not be stopped. For example, 4n-7
+        // is every fourth occurrence, starting with the first one. n=0 and n=1
+        // will exceed the lower bounds of the array (are negative), but n=2
+        // will be within the bounds. So, the for loop should only be stopped at
+        // this point if the index hasn't *increased* since the last iteration
+        // of the loop.
+        elseif ($previous_index !== FALSE && $content_index <= $previous_index) {
           $last_index_reached = TRUE;
         }
-      }
-      // It is possible that the current index exceeds the negative bounds of
-      // the array, but the loop should not be stopped. For example, 4n-7
-      // is every fourth occurrence, starting with the first one. n=0 and n=1
-      // will exceed the lower bounds of the array (are negative), but n=2 will
-      // be within the bounds. So, the for loop should only be stopped at this
-      // point if the index hasn't *increased* since the last iteration of the
-      // loop.
-      elseif ($previous_index !== FALSE && $content_index <= $previous_index) {
-        $last_index_reached = TRUE;
       }
       $previous_index = $content_index;
     }
@@ -906,7 +923,22 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
     '#description' => t('How the block should be inserted.'),
     '#default_value' => $insertion_type,
   );
-  $occurrences_description = t('The occurrence of <span class="block-in-block-where-to-insert">the "Where to insert" string</span> to insert the block at. A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first occurrence, 2 for the second, etc). A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last occurrence, -2 for the second to last, etc). A <span class="block-in-block-occurrence-example">0</span> is all occurrences. A <span class="block-in-block-occurrence-example">"nth-of-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type(). <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered; <span class="block-in-block-occurrence-example">3n</span>: every third; <span class="block-in-block-occurrence-example">-n+3</span>: the first three; etc. Enter multiple occurrences by placing a comma between them: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence; <span class="block-in-block-occurrence-example">3n,-1</span>: every third, plus the last. The order does not matter, and having multiple occurrences will not cause the block to be inserted more than once at the same occurrence. For example, <span class="block-in-block-occurrence-example">"3n,-1"</span> will insert the block exactly one time at the last occurrence, even if the last occurrence is a multiple of 3. The block will not be displayed if <span class="block-in-block-where-to-insert">the "Where to insert" string</span> is not found, or if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).');
+  $occurrences_description = t(
+    'The occurrence of <span class="block-in-block-where-to-insert">the "Where to insert" string</span> to insert the block at.
+   A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first occurrence, 2 for the second, etc).
+   A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last occurrence, -2 for the second to last, etc).
+   A <span class="block-in-block-occurrence-example">0</span> is all occurrences.
+   A <span class="block-in-block-occurrence-example">"nth-of-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
+   <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered;
+    <span class="block-in-block-occurrence-example">3n</span>: every third; <span class="block-in-block-occurrence-example">-n+3</span>: the first three; etc.
+    Enter multiple occurrences by placing a comma between them: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence;
+    <span class="block-in-block-occurrence-example">3n,-1</span>: every third, plus the last.
+    Place a "!" before an occurrence to prevent the block from being inserted there: <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
+    The order does not matter, and having multiple occurrences will not cause the block to be inserted more than once at the same occurrence.
+    For example, <span class="block-in-block-occurrence-example">"3n,-1"</span> will insert the block exactly one time at the last occurrence, even if the last occurrence is a multiple of 3.
+    The block will not be displayed if <span class="block-in-block-where-to-insert">the "Where to insert" string</span> is not found, or if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
+  );
+
   $form['visibility']['block_in_block']['block_in_block_occurrences'] = array(
     '#type' => 'textfield',
     '#title' => t('Occurrences to insert at'),
@@ -1288,6 +1320,12 @@ function block_in_block_form_validate_occurrences($form_state) {
   else {
     $occurrences = explode(',', $occurrences_form_value);
     foreach ($occurrences as $occurrence) {
+      // If necessary, strip negation operator ("!") before evaluating it.
+      // Note: Allowing "!0" and "!n" (exclude all occurrences). Unlikely it was
+      // entered in error, and maybe someone actually has a reason to do it.
+      if (strpos($occurrence, '!') === 0) {
+        $occurrence = substr($occurrence, 1);
+      }
       if (filter_var($occurrence, FILTER_VALIDATE_INT) === FALSE) {
         if (!block_in_block_is_nth_occurrence_expression($occurrence)) {
           $invalid_occurrences[] = $occurrence;
