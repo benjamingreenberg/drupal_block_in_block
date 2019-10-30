@@ -1421,7 +1421,13 @@ function block_in_block_is_valid_nth_occurrence($expression, &$error_messages = 
       $is_valid = TRUE;
     }
     else {
-      $error_messages[] = t('"@original_expression" will never result in a positive number (n=0: @value_when_n_is_0, n=1, @value_when_n_is_1, etc).', array('@original_expression' => $original_expression, '@value_when_n_is_0' => $value_when_n_is_0, '@value_when_n_is_1' => $value_when_n_is_1));
+      $error_messages[] = t('"@original_expression" will never result in a positive number (n=0: @value_when_n_is_0, n=1, @value_when_n_is_1, etc).',
+        array(
+          '@original_expression' => $original_expression,
+          '@value_when_n_is_0' => $value_when_n_is_0,
+          '@value_when_n_is_1' => $value_when_n_is_1,
+        )
+      );
     }
   }
   return $is_valid;
