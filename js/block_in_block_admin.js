@@ -41,6 +41,7 @@
       var typingTimer;
       var doneTypingInterval = 1500;
 
+      doneTyping('.block-in-block-where-to-insert', $('input[name="block_in_block_target_substring"]').val());
       $('input[name="block_in_block_target_substring"]', context).keyup(function (context) {
         clearTimeout(typingTimer);
         typingTimer = setTimeout(function () {

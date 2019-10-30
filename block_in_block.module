@@ -848,7 +848,7 @@ function block_in_block_form_block_add_block_form_alter(&$form, &$form_state) {
 function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
   $enabled = 0;
   $target_blocks = array();
-  $target_substring = '</p>';
+  $target_substring = '';
   $insertion_type = BLOCK_IN_BLOCK_AFTER_TARGET;
   $occurrences = 1;
 
@@ -882,7 +882,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
     '#default_value' => $enabled,
   );
   $form['visibility']['block_in_block']['block_in_block_target_blocks'] = block_in_block_get_target_block_fields($form, $target_blocks);
-  $target_substring_description = t('Case sensitive string to be found in the other block to identify the location to insert this block.<br /><pre>Examples: <em>Before String</em> @opening_p to insert the block before a paragraph. <em>After String</em> @closing_p to insert the block after a paragraph. <em>Replace String</em> !!REPLACE_THIS!! to replace the string with the contents of the block.</pre>', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
+  $target_substring_description = t('Case sensitive string within the target block that identifies the location to insert this block.<br />For example, "@opening_p" for the beginning of any paragraph, or "@closing_p" for the end of any paragraph.', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
   $form['visibility']['block_in_block']['block_in_block_target_substring'] = array(
     '#type' => 'textfield',
     '#title' => t('Where to insert'),
@@ -894,6 +894,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
       ),
     ),
   );
+  $insertion_type_description = t('How the block should be inserted.<br /><pre>Examples: <em>Before String</em> @opening_p, to insert the block before a paragraph. <em>After String</em> @closing_p, to insert the block after a paragraph. <em>Replace String</em> !!REPLACE_THIS!!, to replace the string with the contents of the block.</pre>', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
   $form['visibility']['block_in_block']['block_in_block_insertion_type'] = array(
     '#type' => 'select',
     '#options' => array(
@@ -902,20 +903,20 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
       BLOCK_IN_BLOCK_REPLACE_TARGET => t('Replace String'),
     ),
     '#title' => t('How to insert'),
-    '#description' => t('How the block should be inserted.'),
+    '#description' => $insertion_type_description,
     '#default_value' => $insertion_type,
   );
   $occurrences_description = t(
     'The occurrence of <span class="block-in-block-where-to-insert">the "Where to insert" string</span> to insert the block at.
    A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first occurrence, 2 for the second, etc).
    A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last occurrence, -2 for the second to last, etc).
-   A <span class="block-in-block-occurrence-example">0</span> is all occurrences.
+   A <span class="block-in-block-occurrence-example">0 (zero)</span> is all occurrences.
    A <span class="block-in-block-occurrence-example">"nth-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
    <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered;
     <span class="block-in-block-occurrence-example">3n</span>: every third; <span class="block-in-block-occurrence-example">-n+3</span>: the first three; etc.
-    Enter multiple occurrences by placing a comma between them: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence;
+    Place a <span class="block-in-block-occurrence-example">comma (",") between occurrences</span> to combine their rules: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence;
     <span class="block-in-block-occurrence-example">3n,-1</span>: every third, plus the last.
-    Place a "!" before an occurrence to prevent the block from being inserted there: <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
+    Place the <span class="block-in-block-occurrence-example">negation operator ("!") before an occurrence</span> to prevent the block from being inserted there: <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
     The order does not matter, and having multiple occurrences will not cause the block to be inserted more than once at the same occurrence.
     For example, <span class="block-in-block-occurrence-example">"3n,-1"</span> will insert the block exactly one time at the last occurrence, even if the last occurrence is a multiple of 3.
     The block will not be displayed if <span class="block-in-block-where-to-insert">the "Where to insert" string</span> is not found, or if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
