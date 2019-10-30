@@ -794,7 +794,7 @@ function block_in_block_get_nth_occurrence_expression_parts($expression) {
   else {
     watchdog(
       'block_in_block',
-      'Unable to parse "nth-occurrence" expression, "%expression". The expression should be in the form, "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.',
+      'Unable to parse "nth-occurrence" expression, "%expression". The expression should be in the form: "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.',
       array('%expression' => $original_expression),
       WATCHDOG_ERROR
     );
@@ -1297,6 +1297,7 @@ function block_in_block_form_validate_occurrences($form_state) {
   $occurrences_form_value = $form_state['values']['block_in_block_occurrences'];
   $occurrences = block_in_block_get_formatted_occurrences_string($occurrences_form_value);
   $invalid_occurrences = array();
+  $error_messages = array();
   $error_message = '';
   if (!$occurrences) {
     $error_message = t('"Occurrence to insert at" field is required when inserting a block into another block.');
@@ -1304,21 +1305,22 @@ function block_in_block_form_validate_occurrences($form_state) {
   else {
     $occurrence_parts = explode(',', $occurrences);
     foreach ($occurrence_parts as $occurrence) {
-      if (!block_in_block_is_valid_occurrence($occurrence)) {
+      if (!block_in_block_is_valid_occurrence($occurrence, $error_messages)) {
         $invalid_occurrences[] = $occurrence;
       }
     }
-  }
-
-  if ($invalid_occurrences) {
     if (count($invalid_occurrences) == 1) {
-      $error_message = t('"%occurrence" is not a valid value for Occurrences to insert at field.', array('%occurrence' => $invalid_occurrences[0]));
+      $error_message = t('"%occurrence" is not a valid Occurrence to insert at.', array('%occurrence' => $invalid_occurrences[0]));
     }
-    else {
-      $error_message = t('Invalid values given for Occurrences to insert at field: %occurrences', array('%occurrences' => '"' . implode('", "', $invalid_occurrences) . '"'));
+    elseif (count($invalid_occurrences) > 1) {
+      $error_message = t('Invalid Occurrences to insert at: %occurrences', array('%occurrences' => '"' . implode('", "', $invalid_occurrences) . '"'));
+    }
+
+    if ($error_messages) {
+      $error_message .= '<ul><li>' . implode('</li><li>', $error_messages) . '</li></ul>';
     }
   }
-  if ($error_message) {
+  if (!empty($error_message)) {
     form_set_error('block_in_block_occurrences', $error_message);
   }
 }
@@ -1335,12 +1337,12 @@ function block_in_block_form_validate_occurrences($form_state) {
  *   The formatted string.
  */
 function block_in_block_get_formatted_occurrences_string($occurrences) {
-  $clean_occurrences = $occurrences;
+  $formatted_occurrences = $occurrences;
   if ($occurrences) {
     // Remove whitespace, and change "N" to lowercase.
-    $clean_occurrences = preg_replace(array('/\s+/', '/N/'), array('', 'n'), $occurrences);
+    $formatted_occurrences = preg_replace(array('/\s+/', '/N/'), array('', 'n'), $occurrences);
   }
-  return $clean_occurrences;
+  return $formatted_occurrences;
 }
 
 /**
@@ -1348,24 +1350,36 @@ function block_in_block_get_formatted_occurrences_string($occurrences) {
  *
  * @param $occurrence
  *   String to evaluate.
+ * @param &$error_messages
+ *   Optional array to add any validation error messages into.
  *
  * @return bool
  *   TRUE if a valid occurrence, FALSE otherwise.
  */
-function block_in_block_is_valid_occurrence($occurrence) {
+function block_in_block_is_valid_occurrence($occurrence, &$error_messages = array()) {
   $is_valid = FALSE;
-
+  $original_occurrence = $occurrence;
   // If necessary, strip negation operator ("!") before evaluating it.
   // Note: Allowing "!0" and "!n" (exclude all occurrences). Unlikely it was
   // entered in error, and maybe someone actually has a reason to do it.
-  if (strpos($occurrence, '!') === 0) {
-    $occurrence = substr($occurrence, 1);
+  if (strpos($original_occurrence, '!') === 0) {
+    $occurrence = substr($original_occurrence, 1);
   }
   if (filter_var($occurrence, FILTER_VALIDATE_INT) !== FALSE) {
     $is_valid = TRUE;
   }
-  elseif (block_in_block_is_valid_nth_occurrence($occurrence)) {
-    $is_valid = TRUE;
+  else {
+    $nth_occurrence_errors = array();
+    if (block_in_block_is_valid_nth_occurrence($original_occurrence, $nth_occurrence_errors)) {
+      $is_valid = TRUE;
+    }
+    elseif (!empty($nth_occurrence_errors)) {
+      $error_messages = array_merge($error_messages, $nth_occurrence_errors);
+    }
+    else {
+      // Use a key to prevent this error from being shown more than once.
+      $error_messages['unknown'] = t('A valid occurrence can be an integer, or an expression in the form: "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.', array('@original_occurrence' => $original_occurrence));
+    }
   }
   return $is_valid;
 }
@@ -1375,6 +1389,8 @@ function block_in_block_is_valid_occurrence($occurrence) {
  *
  * @param $expression
  *   String to evaluate.
+ * @param &$error_messages
+ *   Optional array to add any validation error messages into.
  *
  * @return bool
  *   TRUE if valid, FALSE otherwise.
@@ -1382,10 +1398,27 @@ function block_in_block_is_valid_occurrence($occurrence) {
  * @see block_in_block_insert_at_nth_occurrence()
  *   For more information about nth-occurrence expressions.
  */
-function block_in_block_is_valid_nth_occurrence($expression) {
+function block_in_block_is_valid_nth_occurrence($expression, &$error_messages = array()) {
   $is_valid = FALSE;
-  if (block_in_block_get_nth_occurrence_expression_parts($expression) !== FALSE) {
-    $is_valid = TRUE;
+  $original_expression = $expression;
+  // Strip a negation operator ("!") before evaluating the expression.
+  if (strpos($original_expression, '!') === 0) {
+    $expression = substr($original_expression, 1);
+  }
+  $expression_parts = block_in_block_get_nth_occurrence_expression_parts($expression);
+  if ($expression_parts !== FALSE) {
+    // Has the correct format, but it cannot be a valid expression if all values
+    // for "n" equal a negative number.
+    $a = $expression_parts['a'];
+    $b = $expression_parts['b'];
+    $value_when_n_is_0 = $b;
+    $value_when_n_is_1 = $a + $b;
+    if ($value_when_n_is_0 >= 0 || $value_when_n_is_1 > $value_when_n_is_0) {
+      $is_valid = TRUE;
+    }
+    else {
+      $error_messages[] = t('"@original_expression" will always result in a negative number.', array('@original_expression' => $original_expression));
+    }
   }
   return $is_valid;
 }
