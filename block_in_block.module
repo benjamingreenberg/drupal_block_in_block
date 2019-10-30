@@ -487,11 +487,11 @@ function block_in_block_get_content_with_placeholders($content, $insertions) {
 function block_in_block_insert_at_occurrences(&$content, $target_substring, $insertions_by_occurrences) {
   $content_parts = block_in_block_explode_and_keep_delimiter($target_substring, $content);
   foreach ($insertions_by_occurrences as $occurrences => $insertions_by_type) {
-    $occurrences = explode(',', $occurrences);
+    $occurrence_parts = explode(',', $occurrences);
     // Process occurrences beginning with the negation operator ("!") first.
-    sort($occurrences);
+    sort($occurrence_parts);
     $content_indexes_used = array();
-    foreach ($occurrences as $occurrence) {
+    foreach ($occurrence_parts as $occurrence) {
       $is_occurrence_to_exclude = FALSE;
       if (strpos($occurrence, '!') === 0) {
         $is_occurrence_to_exclude = TRUE;
@@ -554,10 +554,10 @@ function block_in_block_explode_and_keep_delimiter($delimiter, $string) {
 }
 
 /**
- * Determines if a set of occurrences has already inserted at a location.
+ * Determines if an occurrence has already been marked for insertion.
  *
- * This function is used to prevent a block configured with multiple occurrences
- * from being inserted at the same location more than once.
+ * This function is used to prevent a block that is configured with multiple
+ * occurrences, from being inserted at the same location more than once.
  *
  * For example, a block should be inserted after every third paragraph, but also
  * must be inserted after the last paragraph ("3n, -1"). Keeping track of the
@@ -681,15 +681,6 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  * - b: positive integer, and required if the operator is included in the
  *   expression.
  *
- * Examples:
- *   n: every occurrence.
- *   2n: even numbered occurrences (2, 4, 6, etc).
- *   2n+1: odd numbered occurrences (1, 3, 5, etc).
- *   3n: every third occurrence (3, 6, 9, etc).
- *   -n+3: only the first three occurrences (1, 2, 3).
- *   n+4: all occurrences after the first three (4, 5, 6, etc).
- *   4n+1: every fourth occurrence, starting at one (1, 5, 9, etc).
- *
  * @param $expression
  *   String containing the nth-occurrence expression.
  * @param $content_parts
@@ -766,41 +757,35 @@ function block_in_block_insert_at_nth_occurrence($expression, &$content_parts, $
 /**
  * Splits an "nth-occurrence" expression into its constituent parts.
  *
- * Must be in the form "an+b", where:
- * - a: non-zero integer (implied 1 if missing)
- * - n: the literal letter "n"
- * - +: operator, can be either "+" or "-", and required if "b" is included
- *   in the expression.
- * - b: positive integer, and required if the operator is included in the
- *   expression.
- *
  * @param $expression
  *   String to evaluate.
  *
  * @return array|false
  *   Associative array containing the following keys:
- *     - expression: string of the expression after whitespace removed, and
- *       the implied "1" inserted for a missing "a".
- *     - a: integer value of "a", or 1.
- *     - b: integer value of "b", with the operator applied as its sign, or 0.
+ *     - expression: string of the expression after the implied "1" has been
+ *       inserted for a missing "a".
+ *     - a: integer value of "a".
+ *     - b: integer value of "b", after the operator is applied as its sign.
  *   FALSE on failure.
  *
  * @see block_in_block_insert_at_nth_occurrence()
+ *   For more information about nth-occurrence expressions.
  */
 function block_in_block_get_nth_occurrence_expression_parts($expression) {
   $expression_parts = FALSE;
-  $clean_expression = preg_replace('/\s+/', '', $expression);
-  if (strpos($clean_expression, 'n') === 0) {
-    $clean_expression = '1' . $clean_expression;
+  $original_expression = $expression;
+  // Add implied "1", if no value given for "a".
+  if (strpos($original_expression, 'n') === 0) {
+    $expression = '1' . $original_expression;
   }
-  elseif (strpos($clean_expression, '-n') === 0) {
-    $clean_expression = substr_replace($clean_expression, '1', 1, 0);
+  elseif (strpos($original_expression, '-n') === 0) {
+    $expression = substr_replace($original_expression, '1', 1, 0);
   }
   $non_zero_integer = '-?[1-9]\d*';
   $operator = '[+-]';
   $positive_integer = '[1-9]\d*';
   $regexp = '/^(?P<expression>(?P<a>' . $non_zero_integer . ')(?P<n>n)(?P<signed_b>((?P<operator>' . $operator . ')(?P<b>' . $positive_integer . '))?))$/';
-  $is_valid_expression = preg_match($regexp, $clean_expression, $matches);
+  $is_valid_expression = preg_match($regexp, $expression, $matches);
   if ($is_valid_expression) {
     $expression_parts['expression'] = $matches['expression'];
     $expression_parts['a'] = (int) $matches['a'];
@@ -809,8 +794,8 @@ function block_in_block_get_nth_occurrence_expression_parts($expression) {
   else {
     watchdog(
       'block_in_block',
-      'Unable to parse "nth-occurrence" expression, "%expression". The expression should be in the form of "an+b", where a and b are integers, and a does not equal zero.',
-      array('%expression' => $expression),
+      'Unable to parse "nth-occurrence" expression, "%expression". The expression should be in the form, "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.',
+      array('%expression' => $original_expression),
       WATCHDOG_ERROR
     );
   }
@@ -1299,7 +1284,8 @@ function block_in_block_form_validate_target_substring($form_state) {
 /**
  * Form Validation handler for occurrences field.
  *
- * Files a form error if the form element has no value.
+ * Files a form error if the form element has no value, or contains invalid
+ * occurrence(s).
  *
  * @param $form_state
  *   Array of metadata about state of form processing.
@@ -1307,36 +1293,28 @@ function block_in_block_form_validate_target_substring($form_state) {
  * @see block_in_block_form_block_admin_configure_validate()
  */
 function block_in_block_form_validate_occurrences($form_state) {
-  // Remove whitespace.
-  $occurrences_form_value = preg_replace('/\s+/', '', $form_state['values']['block_in_block_occurrences']);
+  $occurrences_form_value = $form_state['values']['block_in_block_occurrences'];
+  $occurrences = block_in_block_get_formatted_occurrences_string($occurrences_form_value);
   $invalid_occurrences = array();
   $error_message = '';
-  if (!$occurrences_form_value) {
+  if (!$occurrences) {
     $error_message = t('"Occurrence to insert at" field is required when inserting a block into another block.');
   }
   else {
-    $occurrences = explode(',', $occurrences_form_value);
-    foreach ($occurrences as $occurrence) {
-      // If necessary, strip negation operator ("!") before evaluating it.
-      // Note: Allowing "!0" and "!n" (exclude all occurrences). Unlikely it was
-      // entered in error, and maybe someone actually has a reason to do it.
-      if (strpos($occurrence, '!') === 0) {
-        $occurrence = substr($occurrence, 1);
-      }
-      if (filter_var($occurrence, FILTER_VALIDATE_INT) === FALSE) {
-        if (!block_in_block_is_nth_occurrence_expression($occurrence)) {
-          $invalid_occurrences[] = $occurrence;
-        }
+    $occurrence_parts = explode(',', $occurrences);
+    foreach ($occurrence_parts as $occurrence) {
+      if (!block_in_block_is_valid_occurrence($occurrence)) {
+        $invalid_occurrences[] = $occurrence;
       }
     }
   }
 
   if ($invalid_occurrences) {
     if (count($invalid_occurrences) == 1) {
-      $error_message = t('"%occurrence" is not a valid value for Occurrence to insert at field.', array('%occurrence' => $invalid_occurrences[0]));
+      $error_message = t('"%occurrence" is not a valid value for Occurrences to insert at field.', array('%occurrence' => $invalid_occurrences[0]));
     }
     else {
-      $error_message = t('Invalid values given for Occurrence to insert at field:, "%occurrences"', array('%occurrences' => implode(', ', $invalid_occurrences)));
+      $error_message = t('Invalid values given for Occurrences to insert at field: %occurrences', array('%occurrences' => '"' . implode('", "', $invalid_occurrences) . '"'));
     }
   }
   if ($error_message) {
@@ -1345,7 +1323,54 @@ function block_in_block_form_validate_occurrences($form_state) {
 }
 
 /**
- * Determines whether a string is a valid 'nth-occurrence' expression.
+ * Formats a string to what is required for parsing occurrences.
+ *
+ * Removes whitespace and changes uppercase "N" to lowercase.
+ *
+ * @param $occurrences
+ *   String to act upon.
+ *
+ * @return string
+ *   The formatted string.
+ */
+function block_in_block_get_formatted_occurrences_string($occurrences) {
+  $clean_occurrences = $occurrences;
+  if ($occurrences) {
+    // Remove whitespace, and change "N" to lowercase.
+    $clean_occurrences = preg_replace(array('/\s+/', '/N/'), array('', 'n'), $occurrences);
+  }
+  return $clean_occurrences;
+}
+
+/**
+ * Determines if a string is a valid occurrence.
+ *
+ * @param $occurrence
+ *   String to evaluate.
+ *
+ * @return bool
+ *   TRUE if a valid occurrence, FALSE otherwise.
+ */
+function block_in_block_is_valid_occurrence($occurrence) {
+  $is_valid = FALSE;
+
+  // If necessary, strip negation operator ("!") before evaluating it.
+  // Note: Allowing "!0" and "!n" (exclude all occurrences). Unlikely it was
+  // entered in error, and maybe someone actually has a reason to do it.
+  if (strpos($occurrence, '!') === 0) {
+    $occurrence = substr($occurrence, 1);
+  }
+  if (filter_var($occurrence, FILTER_VALIDATE_INT) !== FALSE) {
+    $is_valid = TRUE;
+  }
+  elseif (block_in_block_is_valid_nth_occurrence($occurrence)) {
+    $is_valid = TRUE;
+  }
+  return $is_valid;
+}
+
+/**
+ * Determines whether a string is a valid "nth-occurrence" expression.
  *
  * @param $expression
  *   String to evaluate.
@@ -1356,7 +1381,7 @@ function block_in_block_form_validate_occurrences($form_state) {
  * @see block_in_block_insert_at_nth_occurrence()
  *   For more information about nth-occurrence expressions.
  */
-function block_in_block_is_nth_occurrence_expression($expression) {
+function block_in_block_is_valid_nth_occurrence($expression) {
   $is_valid = FALSE;
   if (block_in_block_get_nth_occurrence_expression_parts($expression) !== FALSE) {
     $is_valid = TRUE;
@@ -1381,7 +1406,7 @@ function block_in_block_form_block_admin_configure_submit($form, &$form_state) {
     'target_blocks' => json_encode($form_state['values']['block_in_block_target_blocks']['themes']),
     'target_substring' => $form_state['values']['block_in_block_target_substring'],
     'insertion_type' => $form_state['values']['block_in_block_insertion_type'],
-    'occurrences' => preg_replace('/\s+/', '', $form_state['values']['block_in_block_occurrences']),
+    'occurrences' => block_in_block_get_formatted_occurrences_string($form_state['values']['block_in_block_occurrences']),
   ));
   $query->execute();
 }
