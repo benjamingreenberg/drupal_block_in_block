@@ -918,7 +918,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
     <span class="block-in-block-occurrence-example">3n,-1</span>: every third, plus the last.
     Place the <span class="block-in-block-occurrence-example">negation operator ("!") before an occurrence</span> to prevent the block from being inserted there: <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
     The order does not matter, and having multiple occurrences will not cause the block to be inserted more than once at the same occurrence.
-    For example, <span class="block-in-block-occurrence-example">"3n,-1"</span> will insert the block exactly one time at the last occurrence, even if the last occurrence is a multiple of 3.
+    For example, <span class="block-in-block-occurrence-example">"3,3n,2n+1"</span> will insert the block only one time at the third occurrence, not three times.
     The block will not be displayed if <span class="block-in-block-where-to-insert">the "Where to insert" string</span> is not found, or if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
   );
 
@@ -1417,11 +1417,11 @@ function block_in_block_is_valid_nth_occurrence($expression, &$error_messages = 
     $b = $expression_parts['b'];
     $value_when_n_is_0 = $b;
     $value_when_n_is_1 = $a + $b;
-    if ($value_when_n_is_0 >= 0 || $value_when_n_is_1 > $value_when_n_is_0) {
+    if ($value_when_n_is_0 > 0 || $value_when_n_is_1 > $value_when_n_is_0) {
       $is_valid = TRUE;
     }
     else {
-      $error_messages[] = t('"@original_expression" will always result in a negative number.', array('@original_expression' => $original_expression));
+      $error_messages[] = t('"@original_expression" will never result in a positive number (n=0: @value_when_n_is_0, n=1, @value_when_n_is_1, etc).', array('@original_expression' => $original_expression, '@value_when_n_is_0' => $value_when_n_is_0, '@value_when_n_is_1' => $value_when_n_is_1));
     }
   }
   return $is_valid;
