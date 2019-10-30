@@ -24,10 +24,10 @@ the string, after it, or to replace it entirely. When the target block is the
 that the block will be inserted into.
 
 For a full description of the project visit the project page:
-<https://www.drupal.org/project/3089985>
+<https://www.drupal.org/project/block_in_block>
 
 To submit bug reports and feature suggestions, or to track changes:
-<https://www.drupal.org/project/issues/3089985>
+<https://www.drupal.org/project/issues/block_in_block>
 
 REQUIREMENTS
 ------------
