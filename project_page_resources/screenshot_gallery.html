@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta content="width=device-width, initial-scale=1" name="viewport" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #292626;
+      color: #dadada;
+      padding: 5px;
+      font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    .main-content {
+        margin: auto;
+        width: 90%;
+    }
+    .screenshot {
+      margin: 6px 8px;
+      float: left;
+      width: 100%;
+      overflow: hidden;
+      max-width: 330px;
+      background-color: black;
+    }
+    .image {
+      height: 150px;
+      overflow: hidden;
+      border: 1px #c5c5c5 solid;
+      opacity: .8;
+      background-color: white;
+    }
+    .screenshot img {
+      width: 100%;
+      height: auto;
+    }
+
+    .caption {
+      font-size: 11px;
+      font-weight: 700;
+      color: white;
+      font-family: caption, sans-serif;
+      background-color: rgb(15, 61, 98);;
+      padding: 2px;
+      line-height: 15px;
+      border: 1px solid black;
+    }
+
+    @media (min-width: 600px){
+      .screenshot {
+        width: 46%;
+      }
+    }
+    @media (min-width: 900px) {
+      .screenshot {
+        width: 30%;
+      }
+    }
+    .clearfix:after {
+      content: "";
+      display: table;
+      clear: both;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Block in block screenshots</h2>
+  <div class="main-content">
+    <div class="screenshot">
+        <div class="image">
+            <a target="_blank" href="block_in_block_AdminForm_01_Overview.png">
+            <img src="block_in_block_AdminForm_01_Overview.png" width="600" height="400">
+          </a>
+        </div>
+        <div class="caption">Config: Visibility - Within another block.</div>
+    </div>
+
+    <div class="screenshot">
+        <div class="image">
+        <a target="_blank" href="block_in_block_AdminForm_02_BlockToInsertInto_MainPageContent.png">
+          <img src="block_in_block_AdminForm_02_BlockToInsertInto_MainPageContent.png" width="600" height="400">
+        </a>
+        </div>
+        <div class="caption">Block to insert into: Main page content.</div>
+    </div>
+
+      <div class="screenshot">
+        <div class="image">
+        <a target="_blank" href="block_in_block_AdminForm_03_BlockToInsertInto_UserLogin.png">
+          <img src="block_in_block_AdminForm_03_BlockToInsertInto_UserLogin.png" width="600"
+            height="400">
+        </a>
+        </div>
+        <div class="caption">Block to insert into: other block types.</div>
+      </div>
+
+    <div class="screenshot">
+        <div class="image">
+        <a target="_blank" href="block_in_block_AdminForm_04_WhereAndHowToInsert.png">
+          <img src="block_in_block_AdminForm_04_WhereAndHowToInsert.png" width="600" height="400">
+        </a>
+        </div>
+        <div class="caption">Where to insert & How to insert.</div>
+    </div>
+
+      <div class="screenshot">
+        <div class="image">
+        <a target="_blank"
+          href="block_in_block_AdminForm_05_OccurencesToInsertAt.png">
+          <img src="block_in_block_AdminForm_05_OccurrencesToInsertAt.png" width="600"
+            height="400">
+        </a>
+        </div>
+        <div class="caption">Occurrences to insert at.</div>
+      </div>
+
+    <div class="clearfix"></div>
+  </div>
+</body>
+
+</html>
