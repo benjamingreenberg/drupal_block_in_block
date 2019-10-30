@@ -80,7 +80,7 @@ function block_in_block_is_insertable($block) {
  *   - A block object.
  *   - An associative array with the keys 'module' and 'delta'.
  *   - A form array from a block configuration hook.
- * @param $key_parts
+ * @param &$key_parts
  *   Optional array passed by reference to place the block key parts into.
  *
  * @return string|false
@@ -304,7 +304,7 @@ function block_in_block_render_block($block) {
  *   )
  * )
  *
- * @param $block_insertion_groups
+ * @param &$block_insertion_groups
  *   An associative array of insertion groups that target the Main page
  *   content block.
  * @param $settings
@@ -339,7 +339,7 @@ function block_in_block_store_insertion_details_for_main_content(&$block_inserti
 /**
  * Appends content to an insertion group.
  *
- * @param $insertion_group
+ * @param &$insertion_group
  *   Associative array that identifies where and how the content should be
  *   inserted.
  * @param $insertion_group_key
@@ -385,6 +385,9 @@ function block_in_block_preprocess_block(&$variables) {
 
 /**
  * Implements hook_preprocess_node().
+ *
+ * @see block_in_block_preprocess_block()
+ *   For preprocessing of blocks other than the Main page content block.
  */
 function block_in_block_preprocess_node(&$variables, $hook) {
   $block_in_block = &drupal_static('block_in_block');
@@ -469,7 +472,7 @@ function block_in_block_get_content_with_placeholders($content, $insertions) {
 /**
  * Inserts placeholders in content at particular occurrences of a substring.
  *
- * @param $content
+ * @param &$content
  *   String in which the placeholders are to be inserted.
  * @param $target_substring
  *   String within the content that identifies where the placeholders are to be
@@ -568,7 +571,7 @@ function block_in_block_explode_and_keep_delimiter($delimiter, $string) {
  * @param $content_index
  *   Integer with the index of the content array containing the occurrence to
  *   test.
- * @param $content_indexes_used
+ * @param &$content_indexes_used
  *   Array of integers containing indexes that have been used to insert content.
  *
  * @return bool
@@ -585,7 +588,7 @@ function block_in_block_has_been_inserted($content_index, &$content_indexes_used
 /**
  * Inserts placeholder(s) using a target substring as the insertion point.
  *
- * @param $content
+ * @param &$content
  *   String within which the insertions are to take place.
  * @param $target_substring
  *   String within the content, or each string element of the array, that
@@ -683,7 +686,7 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *
  * @param $expression
  *   String containing the nth-occurrence expression.
- * @param $content_parts
+ * @param &$content_parts
  *   Array of strings of the original content split by the target substring.
  * @param $target_substring
  *   String within the content that identifies where the placeholders are to be
@@ -694,7 +697,7 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *   - after: the content should be inserted after the target substring.
  *   - before: the content should be inserted before the target substring.
  *   - replace: the content should replace the target substring.
- * @param $content_indexes_used
+ * @param &$content_indexes_used
  *   Array of indexes that the placeholder should not be inserted into, because
  *   it has already been inserted, or is excluded from being inserted there.
  * @param $is_occurrence_to_exclude
@@ -1090,6 +1093,10 @@ function block_in_block_get_blocks_in_theme_region($theme_key, $region_key, $blo
  * @param $default_view_modes
  *   Associative array containing view modes, keyed by node type, that make up
  *   the default values of the checkboxes.
+ * @param $theme_key
+ *   String identifying the theme.
+ * @param $theme_name
+ *   String containing the display name of the theme.
  *
  * @return array
  *   Collection of checkbox fields.
@@ -1158,7 +1165,7 @@ function block_in_block_get_view_modes_for_node_type($node_type_key, $all_view_m
  *   Associative array of view modes that make up the default values of the
  *   checkboxes.
  * @param $theme_name
- *   String containing the display name of a theme.
+ *   String containing the display name of the theme.
  *
  * @return array
  *   Associative array of checkbox fields.
@@ -1466,8 +1473,6 @@ function block_in_block_form_block_admin_display_form_alter(&$form, &$form_state
 
 /**
  * Implements hook_help().
- *
- * Adapted from Drupal's "Module documentation guidelines" page.
  */
 function block_in_block_help($path, $arg) {
   switch ($path) {
