@@ -170,45 +170,56 @@ function block_in_block_get_block_key_parts($block) {
  *       'replace': the block should replace the target substring.
  *   - occurrences: string of comma separated values indicating the occurrences
  *     of the target_substring that should be used for inserting the block.
- *     Each individual/separated value can be one of the following:
- *     - 0: all occurrences.
- *     - positive integer: a specific occurrence.
- *     - negative integer: a specific occurrence starting from the last
- *       occurrence (-1 last occurrence, -2 second to last, etc).
- *     - nth-occurrence: string in the form of "an+b" used to calculate multiple
- *       occurrences to insert at.
  *   FALSE if the block does not have an entry in the block_in_block table, or
  *   $only_if_enabled is TRUE and the block is not enabled to be inserted.
  *
  * @see block_in_block_get_block_key()
  *   For more information about block keys.
- * @see block_in_block_insert_at_nth_occurrence()
- *   For more information about nth-occurrence expressions.
+ * @see _block_in_block_load_block_in_blocks()
  */
 function block_in_block_get_block_insertion_settings($block, $only_if_enabled = TRUE) {
   $settings = FALSE;
-  $key_parts = block_in_block_get_block_key_parts($block);
-  if ($key_parts) {
-    $enabled_status = array(1);
-    if (!$only_if_enabled) {
-      array_push($enabled_status, 0);
-    }
-    $settings = db_query(
-      "
-      SELECT enabled, target_blocks, target_substring, insertion_type, occurrences
-      FROM {block_in_block}
-      WHERE module = :module AND delta = :delta AND enabled IN (:enabled)", array(
-        ':module' => $key_parts['module'],
-        ':delta' => $key_parts['delta'],
-        ':enabled' => $enabled_status,
-      )
-    )->fetchAssoc();
+  $block_in_block = &drupal_static('block_in_block');
 
-    if ($settings) {
-      $settings['target_blocks'] = json_decode($settings['target_blocks'], TRUE);
+  if (!isset($block_in_block['block_list'])) {
+    $block_in_block['block_list'] = _block_in_block_load_block_in_blocks($only_if_enabled);
+  }
+  $block_key = block_in_block_get_block_key($block);
+  if ($block_key && isset($block_in_block['block_list'][$block_key])) {
+    if (!$only_if_enabled || ($only_if_enabled && $block_in_block['block_list'][$block_key]['enabled'])) {
+      $settings = &$block_in_block['block_list'][$block_key];
     }
+
   }
   return $settings;
+}
+
+/**
+ * Fetches all insertion settings from the database.
+ *
+ * @return array
+ *   Array of insertion settings grouped by block key.
+ *
+ * @see block_in_block_get_block_insertion_settings()
+ */
+function _block_in_block_load_block_in_blocks() {
+  $query = db_select('block_in_block', 'b');
+  $query->fields('b', array(
+    'module',
+    'delta',
+    'enabled',
+    'target_blocks',
+    'target_substring',
+    'insertion_type',
+    'occurrences',
+  ));
+  $query->addExpression("CONCAT(b.module, '_', b.delta)", 'block_key');
+
+  $blocks = $query->execute()->fetchAllAssoc('block_key', PDO::FETCH_ASSOC);
+  foreach ($blocks as &$block) {
+    $block['target_blocks'] = json_decode($block['target_blocks'], TRUE);
+  }
+  return $blocks;
 }
 
 /**
