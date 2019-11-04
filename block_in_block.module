@@ -218,6 +218,7 @@ function _block_in_block_load_block_in_blocks() {
   $blocks = $query->execute()->fetchAllAssoc('block_key', PDO::FETCH_ASSOC);
   foreach ($blocks as &$block) {
     $block['target_blocks'] = json_decode($block['target_blocks'], TRUE);
+    $block['occurrences'] = block_in_block_get_formatted_occurrences_string($block['occurrences']);
   }
   return $blocks;
 }
@@ -1461,7 +1462,7 @@ function block_in_block_form_block_admin_configure_submit($form, &$form_state) {
     'target_blocks' => json_encode($form_state['values']['block_in_block_target_blocks']['themes']),
     'target_substring' => $form_state['values']['block_in_block_target_substring'],
     'insertion_type' => $form_state['values']['block_in_block_insertion_type'],
-    'occurrences' => block_in_block_get_formatted_occurrences_string($form_state['values']['block_in_block_occurrences']),
+    'occurrences' => $form_state['values']['block_in_block_occurrences'],
   ));
   $query->execute();
 }
