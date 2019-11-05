@@ -26,6 +26,10 @@ that the block will be inserted into.
 For a full description of the project visit the project page:
 <https://www.drupal.org/project/block_in_block>
 
+For more detailed information about how to use the module, as well as answers to
+frequently asked questions, visit the module's online documentation:
+<https://www.drupal.org/docs/7/modules/block-in-block>
+
 To submit bug reports and feature suggestions, or to track changes:
 <https://www.drupal.org/project/issues/block_in_block>
 
