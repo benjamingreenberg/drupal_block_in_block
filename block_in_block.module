@@ -601,7 +601,13 @@ function block_in_block_insert_at_occurrences(&$content, $target_substring, $ins
         }
       }
       else {
-        block_in_block_insert_at_nth_occurrence($occurrence, $content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
+        $nth_occurrence_expression_parts = block_in_block_get_nth_occurrence_expression_parts($occurrence);
+        if ($nth_occurrence_expression_parts) {
+          block_in_block_insert_at_nth_occurrence($nth_occurrence_expression_parts, $content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
+        }
+        else {
+          // TODO: Create hooks for custom occurrence type.
+        }
       }
     }
   }
@@ -813,8 +819,8 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
 /**
  * Uses an "nth-occurrence" expression to insert placeholders into content.
  *
- * @param $expression
- *   String containing the nth-occurrence expression.
+ * @param $expression_parts
+ *   Associative array containing the parts of a nth-occurrence expression.
  * @param &$content_parts
  *   Array of strings of the original content split by the target substring.
  * @param $target_substring
@@ -841,8 +847,7 @@ function block_in_block_get_replace_string_for_insertion_type($insertion_type, $
  *   For more information about nth-occurrence expression parts
  * @see block_in_block_insert_at_occurrences()
  */
-function block_in_block_insert_at_nth_occurrence($expression, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
-  $expression_parts = block_in_block_get_nth_occurrence_expression_parts($expression);
+function block_in_block_insert_at_nth_occurrence($expression_parts, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
   if ($expression_parts !== FALSE) {
     $a = $expression_parts['a'];
     $b = $expression_parts['b'];
@@ -855,11 +860,8 @@ function block_in_block_insert_at_nth_occurrence($expression, &$content_parts, $
       $content_index = $a * $n + ($b);
       if (!block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
         if ($content_index > 0) {
-          if (isset($content_parts[$content_index])) {
-            if (!$is_occurrence_to_exclude) {
-              block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
-            }
-            $content_indexes_used[] = $content_index;
+          if (isset($content_parts[$content_index]) && !$is_occurrence_to_exclude) {
+            block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
           }
           // The for loop should only be stopped at this point if the index
           // hasn't *decreased* since the last iteration of the loop.
@@ -876,6 +878,7 @@ function block_in_block_insert_at_nth_occurrence($expression, &$content_parts, $
         elseif ($previous_index !== FALSE && $content_index <= $previous_index) {
           $last_index_reached = TRUE;
         }
+        $content_indexes_used[] = $content_index;
       }
       $previous_index = $content_index;
     }
