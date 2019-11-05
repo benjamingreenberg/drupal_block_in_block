@@ -581,7 +581,6 @@ function block_in_block_insert_at_occurrences(&$content, $target_substring, $ins
         // Strip negation operator.
         $occurrence = substr($occurrence, 1);
       }
-      // "0" is treated as every occurrence.
       if (block_in_block_is_all_occurrences($occurrence)) {
         block_in_block_insert_at_all_occurrences($content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
       }
