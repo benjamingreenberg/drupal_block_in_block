@@ -582,10 +582,10 @@ function block_in_block_insert_at_occurrences(&$content, $target_substring, $ins
         $occurrence = substr($occurrence, 1);
       }
       // "0" is treated as every occurrence.
-      if ($occurrence == '0') {
-        $occurrence = '1n';
+      if (block_in_block_is_all_occurrences($occurrence)) {
+        block_in_block_insert_at_all_occurrences($content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
       }
-      if (filter_var($occurrence, FILTER_VALIDATE_INT) !== FALSE) {
+      elseif (filter_var($occurrence, FILTER_VALIDATE_INT) !== FALSE) {
         // Note: content_array[1] will contain the first occurrence of the
         // target_substring; see block_in_block_explode_and_keep_delimiter().
         $content_index = $occurrence;
@@ -634,6 +634,61 @@ function block_in_block_explode_and_keep_delimiter($delimiter, $string) {
   $string_with_disposable_delimiter = str_replace($delimiter, $concatenated_delimiters, $string);
   $content_parts = explode($disposable_delimiter, $string_with_disposable_delimiter);
   return $content_parts;
+}
+
+/**
+ * Determines if the given string represents "all occurrences".
+ *
+ * @param $occurrence
+ *   String to be acted upon.
+ *
+ * @return bool
+ *   TRUE if it does represent "all occurrences", FALSE otherwise.
+ */
+function block_in_block_is_all_occurrences($occurrence) {
+  $is_all_occurrences = FALSE;
+  if ($occurrence == '0' || $occurrence == '1n' || $occurrence == 'n') {
+    $is_all_occurrences = TRUE;
+  }
+  return $is_all_occurrences;
+}
+
+/**
+ * Inserts placeholders at all occurrences of a substring.
+ *
+ * @param &$content_parts
+ *   Array of strings of the original content split by the target substring.
+ * @param $target_substring
+ *   String within the content that identifies where the placeholders are to be
+ *   inserted.
+ * @param $insertions_by_type
+ *   Associative array containing the placeholder string, keyed by how the
+ *   insertion is to take place. Possible keys:
+ *   - after: the content should be inserted after the target substring.
+ *   - before: the content should be inserted before the target substring.
+ *   - replace: the content should replace the target substring.
+ * @param &$content_indexes_used
+ *   Array of indexes that the placeholder should not be inserted into, because
+ *   it has already been inserted, or is excluded from being inserted there.
+ * @param $is_occurrence_to_exclude
+ *   Boolean indicating if indexes matching the expression should be added to
+ *   $content_indexes_used without inserting the placeholder.
+ *
+ * @see block_in_block_explode_and_keep_delimiter()
+ *   For more information about the $content_parts.
+ * @see block_in_block_has_been_inserted()
+ *   For more information about $content_indexes_used.
+ * @see block_in_block_insert_at_occurrences()
+ */
+function block_in_block_insert_at_all_occurrences(&$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
+  for ($i = 1; $i < count($content_parts); $i++) {
+    if (!block_in_block_has_been_inserted($i, $content_indexes_used)) {
+      if (!$is_occurrence_to_exclude) {
+        block_in_block_insert_at_substring($content_parts[$i], $target_substring, $insertions_by_type);
+      }
+      $content_indexes_used[] = $i;
+    }
+  }
 }
 
 /**
