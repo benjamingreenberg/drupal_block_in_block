@@ -118,16 +118,16 @@ function block_in_block_is_insertable($block) {
   $block_in_block = &drupal_static('block_in_block');
 
   $block_key = block_in_block_get_block_key($block);
-  if (isset($block_in_block['blocks'][$block_key])) {
-    $is_insertable = TRUE;
-  }
-  else {
-    $block_settings = block_in_block_get_block_insertion_settings($block);
-    if ($block_settings) {
+  if (!isset($block_in_block['blocks'][$block_key])) {
+    $insertion_settings = block_in_block_get_block_insertion_settings($block_key);
+    if ($insertion_settings && $insertion_settings['enabled']) {
       $is_insertable = TRUE;
-      $block_in_block['blocks'][$block_key]['settings'] = $block_settings;
     }
   }
+  else {
+    $is_insertable = $block_in_block['blocks'][$block_key]['enabled'];
+  }
+
   return $is_insertable;
 }
 
@@ -203,7 +203,7 @@ function block_in_block_get_block_key_parts($block) {
  * Fetches the settings for a block from the block_in_block table.
  *
  * @param $block
- *   The block to get the settings for.
+ *   The block to get the settings for, or a string containing its block key.
  * @param $only_if_enabled
  *   Boolean to indicate if settings should only be returned if the block is
  *   configured to be inserted into another block.
@@ -242,13 +242,18 @@ function block_in_block_get_block_insertion_settings($block, $only_if_enabled = 
   $settings = FALSE;
   $block_in_block = &drupal_static('block_in_block');
 
-  if (!isset($block_in_block['block_list'])) {
-    $block_in_block['block_list'] = _block_in_block_load_block_in_blocks($only_if_enabled);
+  if (!isset($block_in_block['blocks'])) {
+    $block_in_block['blocks'] = _block_in_block_load_block_in_blocks($only_if_enabled);
   }
-  $block_key = block_in_block_get_block_key($block);
-  if ($block_key && isset($block_in_block['block_list'][$block_key])) {
-    if (!$only_if_enabled || ($only_if_enabled && $block_in_block['block_list'][$block_key]['enabled'])) {
-      $settings = &$block_in_block['block_list'][$block_key];
+
+  $block_key = $block;
+  if (!is_string($block)) {
+    $block_key = block_in_block_get_block_key($block);
+  }
+
+  if ($block_key && isset($block_in_block['blocks'][$block_key])) {
+    if (!$only_if_enabled || ($only_if_enabled && $block_in_block['blocks'][$block_key]['enabled'])) {
+      $settings = $block_in_block['blocks'][$block_key];
     }
 
   }
@@ -279,6 +284,7 @@ function _block_in_block_load_block_in_blocks() {
   $blocks = $query->execute()->fetchAllAssoc('block_key', PDO::FETCH_ASSOC);
   foreach ($blocks as &$block) {
     $block['target_blocks'] = json_decode($block['target_blocks'], TRUE);
+    $block['enabled'] = (bool) $block['enabled'];
     $block['occurrences'] = block_in_block_get_formatted_occurrences_string($block['occurrences']);
   }
   return $blocks;
@@ -317,7 +323,7 @@ function _block_in_block_load_block_in_blocks() {
 function block_in_block_store_insertion_details($block) {
   $block_in_block = &drupal_static('block_in_block');
   $block_key = block_in_block_get_block_key($block);
-  $settings = $block_in_block['blocks'][$block_key]['settings'];
+  $settings = $block_in_block['blocks'][$block_key];
   $content_to_insert = block_in_block_render_block($block);
   global $theme_key;
   foreach ($settings['target_blocks'] as $target_theme_key => $target_theme_settings) {
