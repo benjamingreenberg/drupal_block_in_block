@@ -252,7 +252,7 @@ function block_in_block_get_block_insertion_settings($block, $include_disabled =
   }
 
   if ($block_key && isset($block_in_block['blocks'][$block_key])) {
-    if ($include_disabled || (!$include_disabled && $block_in_block['blocks'][$block_key]['enabled'])) {
+    if ($include_disabled || $block_in_block['blocks'][$block_key]['enabled']) {
       $settings = $block_in_block['blocks'][$block_key];
     }
 
