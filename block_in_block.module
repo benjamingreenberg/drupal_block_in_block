@@ -204,9 +204,9 @@ function block_in_block_get_block_key_parts($block) {
  *
  * @param $block
  *   The block to get the settings for, or a string containing its block key.
- * @param $only_if_enabled
- *   Boolean to indicate if settings should only be returned if the block is
- *   configured to be inserted into another block.
+ * @param $include_disabled
+ *   Boolean to indicate whether to return the insertion settings for a block
+ *   if it is configured not to be inserted.
  *
  * @return array|false
  *   An associative array containing the following elements:
@@ -238,7 +238,7 @@ function block_in_block_get_block_key_parts($block) {
  *   For more information about block keys.
  * @see _block_in_block_load_block_in_blocks()
  */
-function block_in_block_get_block_insertion_settings($block, $only_if_enabled = TRUE) {
+function block_in_block_get_block_insertion_settings($block, $include_disabled = FALSE) {
   $settings = FALSE;
   $block_in_block = &drupal_static('block_in_block');
 
@@ -252,7 +252,7 @@ function block_in_block_get_block_insertion_settings($block, $only_if_enabled = 
   }
 
   if ($block_key && isset($block_in_block['blocks'][$block_key])) {
-    if (!$only_if_enabled || ($only_if_enabled && $block_in_block['blocks'][$block_key]['enabled'])) {
+    if ($include_disabled || (!$include_disabled && $block_in_block['blocks'][$block_key]['enabled'])) {
       $settings = $block_in_block['blocks'][$block_key];
     }
 
@@ -850,12 +850,12 @@ function block_in_block_insert_at_nth_occurrence($expression_parts, &$content_pa
   if ($expression_parts !== FALSE) {
     $a = $expression_parts['a'];
     $b = $expression_parts['b'];
-    $last_index_reached = FALSE;
+    $final_insertion_made = FALSE;
     $previous_index = FALSE;
 
     // Note: first occurrence of the target_substring will always be at index 1.
     // @see block_in_block_explode_and_keep_delimiter() for more information.
-    for ($n = 0; !$last_index_reached; $n++) {
+    for ($n = 0; !$final_insertion_made; $n++) {
       $content_index = $a * $n + ($b);
       if (!block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
         if ($content_index > 0) {
@@ -867,7 +867,7 @@ function block_in_block_insert_at_nth_occurrence($expression_parts, &$content_pa
           // For example, -n+5 when there are 4 occurrences: f(0)=5 exceeds the
           // bounds of the array, but f(1)=4 does not.
           elseif ($previous_index !== FALSE && $content_index >= $previous_index) {
-            $last_index_reached = TRUE;
+            $final_insertion_made = TRUE;
           }
         }
         // The for loop should only be stopped at this point if the index
@@ -875,7 +875,7 @@ function block_in_block_insert_at_nth_occurrence($expression_parts, &$content_pa
         // For example, 4n-7 is every fourth occurrence, starting with the
         // first one. f(0)=-7, f(1)=-3, f(2)=1, etc.
         elseif ($previous_index !== FALSE && $content_index <= $previous_index) {
-          $last_index_reached = TRUE;
+          $final_insertion_made = TRUE;
         }
         $content_indexes_used[] = $content_index;
       }
@@ -991,7 +991,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
   $insertion_type = BLOCK_IN_BLOCK_AFTER_TARGET;
   $occurrences = 1;
 
-  $defaults = block_in_block_get_block_insertion_settings($form, FALSE);
+  $defaults = block_in_block_get_block_insertion_settings($form, TRUE);
   if ($defaults) {
     $enabled = $defaults['enabled'];
     $target_blocks = $defaults['target_blocks'];
