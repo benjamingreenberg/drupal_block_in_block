@@ -243,7 +243,7 @@ function block_in_block_get_block_insertion_settings($block, $include_disabled =
   $block_in_block = &drupal_static('block_in_block');
 
   if (!isset($block_in_block['blocks'])) {
-    $block_in_block['blocks'] = _block_in_block_load_block_in_blocks($only_if_enabled);
+    $block_in_block['blocks'] = _block_in_block_load_block_in_blocks();
   }
 
   $block_key = $block;
