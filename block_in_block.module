@@ -134,6 +134,9 @@ function _block_in_block_is_insertable($block) {
     $is_insertable = $block_in_block['blocks'][$block_key]['enabled'];
   }
 
+  // Allow modules to change if a block should be inserted.
+  drupal_alter('block_in_block_is_insertable', $is_insertable, $block);
+
   return $is_insertable;
 }
 
@@ -320,6 +323,10 @@ function _block_in_block_load_block_in_blocks() {
     $block['enabled'] = (bool) $block['enabled'];
     $block['occurrences'] = _block_in_block_get_formatted_occurrences_string($block['occurrences']);
   }
+
+  // Allow modules to modify the block list.
+  drupal_alter('block_in_block_list', $blocks);
+
   return $blocks;
 }
 
@@ -336,8 +343,12 @@ function _block_in_block_load_block_in_blocks() {
  *   $target_substring => array(
  *     $occurrences => array(
  *       $insertion_type => arry(
- *         'content_to_insert' => appends rendered $block,
+ *         'blocks_to_insert' => array of blocks keyed by its block_key,
  *         'insertion_group_placeholder' => $insertion_group_placeholder,
+ *         'insertion_group_key' = > $insertion_group_key,
+ *         'target_block_key' = > $target_block_key,
+ *         'target_substring' = > $target_substring,
+ *         'occurrences' = > $occurrences,
  *       )
  *     )
  *   )
@@ -357,6 +368,10 @@ function _block_in_block_store_block_to_insert($block) {
   $block_in_block = &drupal_static('block_in_block');
   $block_key = block_in_block_get_block_key($block);
   $settings = $block_in_block['blocks'][$block_key];
+
+  // Allow modules to modify the block insertion settings.
+  drupal_alter('block_in_block_settings', $settings, $block);
+
   $block->insertion_settings = &$settings;
   global $theme_key;
   foreach ($settings['target_blocks'] as $target_theme_key => $target_theme_settings) {
@@ -373,6 +388,7 @@ function _block_in_block_store_block_to_insert($block) {
         if (!isset($insertion_group['insertion_group_key'])) {
           $insertion_group['insertion_group_key'] = $insertion_group_key;
           $insertion_group['target_block_key'] = $target_block_key;
+          $insertion_group['insertion_type'] = $settings['insertion_type'];
         }
         _block_in_block_add_block_to_insertion_group($insertion_group, $block);
       }
@@ -381,18 +397,27 @@ function _block_in_block_store_block_to_insert($block) {
 }
 
 /**
- * Stores details about a block for later insertion into the Main page content.
+ * Stores settings for a block for insertion into the Main page content.
  *
- * The associative array containing the details has the following structure
- * (difference from generic block types: has keys for node type and view mode):
+ * Blocks being inserted into the Main page content are stored with a different
+ * structure than other blocks. This is because blocks being inserted into the
+ * Main page content can be configured to be inserted only for certain
+ * node_types and view_modes:
  * $target_block_key => array(
  *   $node_type => array(
  *     $view_mode => array(
  *       $target_substring => array(
  *         $occurrences => array(
  *           $insertion_type => arry(
- *             'content_to_insert' => appends rendered $block,
+ *             'blocks_to_insert' => array of blocks keyed by its block_key,
  *             'insertion_group_placeholder' => $insertion_group_placeholder,
+ *             'insertion_group_key' = > $insertion_group_key,
+ *             'target_block_key' = > $target_block_key,
+ *             'node_type' = > $node_type,
+ *             'view_mode' = > $view_mode,
+ *             'target_substring' = > $target_substring,
+ *             'occurrences' = > $occurrences,
+ *             'insertion_type' = > $insertion_type,
  *           )
  *         )
  *       )
@@ -409,6 +434,9 @@ function _block_in_block_store_block_to_insert($block) {
  * @param $view_modes_by_node_type
  *   An associative array containing information on which view modes the content
  *   should be inserted into, keyed by node type.
+ *
+ * @see _block_in_block_store_block_to_insert()
+ *   For more information about how other blocks are stored.
  * @see _block_in_block_store_block_to_insert()
  *   For more information about insertion groups, insertion group keys, and how
  *   the details are stored.
@@ -427,6 +455,7 @@ function _block_in_block_store_block_to_insert_into_main_content(&$insertion_gro
           $insertion_group['target_block_key'] = BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY;
           $insertion_group['node_type'] = $node_type;
           $insertion_group['view_mode'] = $view_mode;
+          $insertion_group['insertion_type'] = $settings['insertion_type'];
         }
         _block_in_block_add_block_to_insertion_group($insertion_group, $block);
       }
@@ -435,7 +464,7 @@ function _block_in_block_store_block_to_insert_into_main_content(&$insertion_gro
 }
 
 /**
- * Appends content to an insertion group.
+ * Adds a block to its insertion group.
  *
  * @param &$insertion_group
  *   Associative array that identifies where and how the content should be
@@ -556,7 +585,7 @@ function _block_in_block_get_content_with_placeholders($content, $insertion_grou
   foreach ($insertion_groups_for_target_substrings as $target_substring => $insertion_groups_for_occurrences) {
     if (strpos($content, $target_substring) !== FALSE) {
       $target_substring_found = TRUE;
-      _block_in_block_insert_placeholders_at_occurrences($content_with_placeholders, $target_substring, $insertion_groups_for_occurrences);
+      $content_with_placeholders = _block_in_block_get_content_with_placeholders_at_occurrences($content_with_placeholders, $target_substring, $insertion_groups_for_occurrences);
     }
   }
   if (!$target_substring_found) {
@@ -574,60 +603,110 @@ function _block_in_block_get_content_with_placeholders($content, $insertion_grou
  *   String within the content that identifies where the placeholders are to be
  *   inserted.
  * @param $insertion_groups_for_occurrences
- *   Associative array containing the placeholders to be inserted, keyed by
- *   the occurrences of the target substring to be insert at, and the insertion
+ *   Associative array containing the insertion settings, keyed by the
+ *   occurrences of the target substring to be insert at, and the insertion
  *   type.
  *
  * @see _block_in_block_store_block_to_insert()
  *   For more information about $insertion_groups_for_occurrences.
- * @see _block_in_block_get_content_with_placeholders()
- *   For more information about insertion group placeholders.
  */
-function _block_in_block_insert_placeholders_at_occurrences(&$content, $target_substring, $insertion_groups_for_occurrences) {
+function _block_in_block_get_content_with_placeholders_at_occurrences($content, $target_substring, $insertion_groups_for_occurrences) {
   $content_parts = block_in_block_explode_and_keep_delimiter($target_substring, $content);
-  foreach ($insertion_groups_for_occurrences as $occurrences => $insertions_by_type) {
+  foreach ($insertion_groups_for_occurrences as $occurrences => $insertion_groups_by_insertion_type) {
     $occurrence_parts = explode(',', $occurrences);
-    // Sort so occurrences that start with the negation operator ("!") are
-    // processed first.
+    // Sorting the $occurrence_parts ensures that occurrences that start with
+    // the negation operator ("!") are processed first.
     sort($occurrence_parts);
     $content_indexes_used = array();
+
+    // Allow modules to alter insertion at all occurrences.
+    $insertions_from_hooks = array();
+    $insertion_details = array(
+      'content_parts' => &$content_parts,
+      'content_indexes_used' => &$content_indexes_used,
+      'insertion_groups_by_insertion_type' => $insertion_groups_by_insertion_type,
+      'inserted_insertion_groups' => &$insertions_from_hooks,
+    );
+    drupal_alter('block_in_block_insert_placeholders_at_occurrences', $occurrence_parts, $insertion_details);
+    foreach ($insertions_from_hooks as $insertion_group) {
+      block_in_block_store_inserted_placeholder_content($insertion_group);
+    }
+
     foreach ($occurrence_parts as $occurrence) {
-      $is_occurrence_to_exclude = FALSE;
-      if (strpos($occurrence, '!') === 0) {
-        $is_occurrence_to_exclude = TRUE;
-        // Strip negation operator.
-        $occurrence = substr($occurrence, 1);
+      _block_in_block_insert_placeholders_at_occurrence($content_parts, $insertion_groups_by_insertion_type, $content_indexes_used, $occurrence);
+    }
+  }
+  $content_with_placeholders = implode(' ', $content_parts);
+  return $content_with_placeholders;
+}
+
+/**
+ * Inserts placeholders in content at an occurrence, or occurrence expression.
+ *
+ * @param &$content_parts
+ *   Array of strings of the original content split by the target substring.
+ * @param $insertion_groups_by_insertion_type
+ *   Associative array containing insertion groups, keyed by how the
+ *   insertion is to take place. Possible keys:
+ *   - after: the content should be inserted after the target substring.
+ *   - before: the content should be inserted before the target substring.
+ *   - replace: the content should replace the target substring.
+ * @param &$content_indexes_used
+ *   Array of indexes that the placeholder should not be inserted into, because
+ *   it has already been inserted, or is excluded from being inserted there.
+ * @param $occurrence_expression
+ *   String containing an occurrence, or occurrence expression.
+ *
+ * @see _block_in_block_get_content_with_placeholders_at_occurrences()
+ */
+function _block_in_block_insert_placeholders_at_occurrence(&$content_parts, $insertion_groups_by_insertion_type, &$content_indexes_used, $occurrence_expression) {
+  $occurrence = $occurrence_expression;
+  $is_occurrence_to_exclude = FALSE;
+  if (strpos($occurrence_expression, '!') === 0) {
+    $is_occurrence_to_exclude = TRUE;
+    // Strip negation operator.
+    $occurrence = substr($occurrence_expression, 1);
+  }
+  if (_block_in_block_is_all_occurrences($occurrence)) {
+    _block_in_block_insert_placeholders_at_all_occurrences($content_parts, $insertion_groups_by_insertion_type, $content_indexes_used, $is_occurrence_to_exclude);
+  }
+  elseif (filter_var($occurrence, FILTER_VALIDATE_INT) !== FALSE) {
+    // Note: content_array[1] will contain the first occurrence of the
+    // target_substring; see block_in_block_explode_and_keep_delimiter().
+    $content_index = $occurrence;
+    if ($occurrence < 0) {
+      // Negative means to begin counting from the last occurrence, forward.
+      $content_index = $occurrence + count($content_parts);
+    }
+    if (isset($content_parts[$content_index]) && !_block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
+      if (!$is_occurrence_to_exclude) {
+        _block_in_block_insert_placeholders($content_parts[$content_index], $insertion_groups_by_insertion_type);
       }
-      if (_block_in_block_is_all_occurrences($occurrence)) {
-        _block_in_block_insert_at_all_occurrences($content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
-      }
-      elseif (filter_var($occurrence, FILTER_VALIDATE_INT) !== FALSE) {
-        // Note: content_array[1] will contain the first occurrence of the
-        // target_substring; see block_in_block_explode_and_keep_delimiter().
-        $content_index = $occurrence;
-        if ($occurrence < 0) {
-          // Negative means to begin counting from the last occurrence, forward.
-          $content_index = $occurrence + count($content_parts);
-        }
-        if (isset($content_parts[$content_index]) && !_block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
-          if (!$is_occurrence_to_exclude) {
-            _block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
-          }
-          $content_indexes_used[] = $content_index;
-        }
-      }
-      else {
-        $nth_occurrence_expression_parts = _block_in_block_get_nth_occurrence_expression_parts($occurrence);
-        if ($nth_occurrence_expression_parts) {
-          _block_in_block_insert_at_nth_occurrence($nth_occurrence_expression_parts, $content_parts, $target_substring, $insertions_by_type, $content_indexes_used, $is_occurrence_to_exclude);
-        }
-        else {
-          // TODO: Create hooks for custom occurrence type.
-        }
+      $content_indexes_used[] = $content_index;
+    }
+  }
+  else {
+    $nth_occurrence_expression_parts = _block_in_block_get_nth_occurrence_expression_parts($occurrence);
+    if ($nth_occurrence_expression_parts) {
+      _block_in_block_insert_placeholders_at_nth_occurrence($nth_occurrence_expression_parts, $content_parts, $insertion_groups_by_insertion_type, $content_indexes_used, $is_occurrence_to_exclude);
+    }
+    else {
+
+      // Allow modules to insert using their own occurrence type.
+      $insertions_from_hooks = array();
+      $insertion_details = array(
+        'content_parts' => &$content_parts,
+        'content_indexes_used' => &$content_indexes_used,
+        'insertions_by_type' => $insertion_groups_by_insertion_type,
+        'is_occurrence_to_exclude' => $is_occurrence_to_exclude,
+        'inserted_insertion_groups' => &$insertions_from_hooks,
+      );
+      drupal_alter('block_in_block_insert_placeholders_at_occurrence', $occurrence_expression, $insertion_details);
+      foreach ($insertions_from_hooks as $insertion_group) {
+        block_in_block_store_inserted_placeholder_content($insertion_group);
       }
     }
   }
-  $content = implode(' ', $content_parts);
 }
 
 /**
@@ -680,11 +759,8 @@ function _block_in_block_is_all_occurrences($occurrence) {
  *
  * @param &$content_parts
  *   Array of strings of the original content split by the target substring.
- * @param $target_substring
- *   String within the content that identifies where the placeholders are to be
- *   inserted.
- * @param $insertions_by_type
- *   Associative array containing the placeholder string, keyed by how the
+ * @param $insertion_groups_by_insertion_type
+ *   Associative array containing insertion groups, keyed by how the
  *   insertion is to take place. Possible keys:
  *   - after: the content should be inserted after the target substring.
  *   - before: the content should be inserted before the target substring.
@@ -700,13 +776,13 @@ function _block_in_block_is_all_occurrences($occurrence) {
  *   For more information about the $content_parts.
  * @see _block_in_block_has_been_inserted()
  *   For more information about $content_indexes_used.
- * @see _block_in_block_insert_placeholders_at_occurrences()
+ * @see _block_in_block_get_content_with_placeholders_at_occurrences()
  */
-function _block_in_block_insert_at_all_occurrences(&$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
+function _block_in_block_insert_placeholders_at_all_occurrences(&$content_parts, $insertion_groups_by_insertion_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
   for ($i = 1; $i < count($content_parts); $i++) {
     if (!_block_in_block_has_been_inserted($i, $content_indexes_used)) {
       if (!$is_occurrence_to_exclude) {
-        _block_in_block_insert_at_substring($content_parts[$i], $target_substring, $insertions_by_type);
+        _block_in_block_insert_placeholders($content_parts[$i], $insertion_groups_by_insertion_type);
       }
       $content_indexes_used[] = $i;
     }
@@ -747,30 +823,30 @@ function _block_in_block_has_been_inserted($content_index, &$content_indexes_use
  *
  * @param &$content
  *   String within which the insertions are to take place.
- * @param $target_substring
- *   String within the content, or each string element of the array, that
- *   identifies where the placeholders are to be inserted.
- * @param $insertions_by_type
- *   Associative array containing the placeholder string, keyed by how the
+ * @param $insertion_groups_by_insertion_type
+ *   Associative array containing insertion groups, keyed by how the
  *   insertion is to take place. Possible keys:
  *   - after: the content should be inserted after the target substring.
  *   - before: the content should be inserted before the target substring.
  *   - replace: the content should replace the target substring.
  *
  * @see _block_in_block_get_content_with_insertions
- *   For more information about $insertions_by_type.
+ *   For more information about $insertion_groups_by_insertion_type.
  * @see _block_in_block_get_content_with_placeholders()
  *   For more information about insertion_group_placeholder.
  */
-function _block_in_block_insert_at_substring(&$content, $target_substring, $insertions_by_type) {
-  foreach ($insertions_by_type as $insertion_type => $insertion_group) {
-    $insertion_group_placeholder = $insertion_group['insertion_group_placeholder'];
-    _block_in_block_store_inserted_placeholder_content($insertion_group);
-    // Using str_replace instead of pre-pending the content, so that the order
-    // of the content being inserted is the same as the order of their
-    // respective blocks within the region.
-    $replace = _block_in_block_get_replace_string_for_insertion_type($insertion_type, $target_substring, $insertion_group_placeholder);
-    $content = str_replace($target_substring, $replace, $content);
+function _block_in_block_insert_placeholders(&$content, $insertion_groups_by_insertion_type) {
+  foreach ($insertion_groups_by_insertion_type as $insertion_group) {
+    block_in_block_store_inserted_placeholder_content($insertion_group);
+    $replace = _block_in_block_get_replace_string_for_insertion_group($insertion_group);
+    $target_substring = $insertion_group['target_substring'];
+    $content_with_placeholders = str_replace($target_substring, $replace, $content);
+
+    // Allow other modules to change how the placeholder is inserted, or
+    // implement custom insertion types.
+    drupal_alter('block_in_block_insert_placeholder', $content_with_placeholders, $content, $insertion_group);
+
+    $content = $content_with_placeholders;
   }
 }
 
@@ -787,7 +863,7 @@ function _block_in_block_insert_at_substring(&$content, $target_substring, $inse
  * @see _block_in_block_replace_all_placeholders()
  *  For more information on how the replacement takes place.
  */
-function _block_in_block_store_inserted_placeholder_content($insertion_group) {
+function block_in_block_store_inserted_placeholder_content($insertion_group) {
   $block_in_block = &drupal_static('block_in_block');
   if (!isset($block_in_block['inserted_placeholders'])) {
     $block_in_block['inserted_placeholders'] = array();
@@ -831,21 +907,26 @@ function _block_in_block_render_blocks($block) {
  * @return string
  *   "replace" to be used for the insertion.
  */
-function _block_in_block_get_replace_string_for_insertion_type($insertion_type, $target_substring, $content_to_insert) {
+function _block_in_block_get_replace_string_for_insertion_group($insertion_group) {
+  $placeholder = $insertion_group['insertion_group_placeholder'];
+  $target_substring = $insertion_group['target_substring'];
+  $insertion_type = $insertion_group['insertion_type'];
   $replace = $target_substring;
   switch ($insertion_type) {
     case BLOCK_IN_BLOCK_AFTER_TARGET:
-      $replace = $target_substring . $content_to_insert;
+      $replace = $target_substring . $placeholder;
       break;
 
     case BLOCK_IN_BLOCK_BEFORE_TARGET:
-      $replace = $content_to_insert . $target_substring;
+      $replace = $placeholder . $target_substring;
       break;
 
     case BLOCK_IN_BLOCK_REPLACE_TARGET:
-      $replace = $content_to_insert;
+      $replace = $placeholder;
       break;
   }
+  // Allow other modules to alter the replace string or implement custom types.
+  drupal_alter('block_in_block_replacement_string', $replace, $insertion_group);
   return $replace;
 }
 
@@ -856,11 +937,8 @@ function _block_in_block_get_replace_string_for_insertion_type($insertion_type, 
  *   Associative array containing the parts of a nth-occurrence expression.
  * @param &$content_parts
  *   Array of strings of the original content split by the target substring.
- * @param $target_substring
- *   String within the content that identifies where the placeholders are to be
- *   inserted.
- * @param $insertions_by_type
- *   Associative array containing the placeholder string, keyed by how the
+ * @param $insertion_groups_by_insertion_type
+ *   Associative array containing insertion groups, keyed by how the
  *   insertion is to take place. Possible keys:
  *   - after: the content should be inserted after the target substring.
  *   - before: the content should be inserted before the target substring.
@@ -878,9 +956,9 @@ function _block_in_block_get_replace_string_for_insertion_type($insertion_type, 
  *   For more information about $content_indexes_used.
  * @see _block_in_block_get_nth_occurrence_expression_parts()
  *   For more information about nth-occurrence expression parts
- * @see _block_in_block_insert_placeholders_at_occurrences()
+ * @see _block_in_block_get_content_with_placeholders_at_occurrences()
  */
-function _block_in_block_insert_at_nth_occurrence($expression_parts, &$content_parts, $target_substring, $insertions_by_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
+function _block_in_block_insert_placeholders_at_nth_occurrence($expression_parts, &$content_parts, $insertion_groups_by_insertion_type, &$content_indexes_used, $is_occurrence_to_exclude = FALSE) {
   if ($expression_parts !== FALSE) {
     $a = $expression_parts['a'];
     $b = $expression_parts['b'];
@@ -894,7 +972,7 @@ function _block_in_block_insert_at_nth_occurrence($expression_parts, &$content_p
       if (!_block_in_block_has_been_inserted($content_index, $content_indexes_used)) {
         if ($content_index > 0) {
           if (isset($content_parts[$content_index]) && !$is_occurrence_to_exclude) {
-            _block_in_block_insert_at_substring($content_parts[$content_index], $target_substring, $insertions_by_type);
+            _block_in_block_insert_placeholders($content_parts[$content_index], $insertion_groups_by_insertion_type);
           }
           // The for loop should only be stopped at this point if the index
           // hasn't *decreased* since the last iteration of the loop.
@@ -941,7 +1019,7 @@ function _block_in_block_insert_at_nth_occurrence($expression_parts, &$content_p
  *     - b: integer value of "b", after the operator is applied as its sign.
  *   FALSE on failure.
  *
- * @see _block_in_block_insert_at_nth_occurrence()
+ * @see _block_in_block_insert_placeholders_at_nth_occurrence()
  *   For more information about nth-occurrence expressions.
  */
 function _block_in_block_get_nth_occurrence_expression_parts($expression) {
@@ -964,14 +1042,6 @@ function _block_in_block_get_nth_occurrence_expression_parts($expression) {
     $expression_parts['a'] = (int) $matches['a'];
     $expression_parts['b'] = (int) $matches['signed_b'];
   }
-  else {
-    watchdog(
-      'block_in_block',
-      'Unable to parse "nth-occurrence" expression, "%expression". The expression should be in the form: "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.',
-      array('%expression' => $original_expression),
-      WATCHDOG_ERROR
-    );
-  }
   return $expression_parts;
 }
 
@@ -986,7 +1056,7 @@ function _block_in_block_get_nth_occurrence_expression_parts($expression) {
  *
  * @see _block_in_block_get_content_with_placeholders()
  *   For more information about insertion group placeholders.
- * @see _block_in_block_store_inserted_placeholder_content()
+ * @see block_in_block_store_inserted_placeholder_content()
  *   For more information about how inserted placeholders are stored.
  */
 function _block_in_block_replace_all_placeholders($content_with_placeholders) {
@@ -1055,7 +1125,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
     '#default_value' => $enabled,
   );
   $form['visibility']['block_in_block']['block_in_block_target_blocks'] = _block_in_block_get_target_block_fields($form, $target_blocks);
-  $target_substring_description = t('Case sensitive string within the target block that identifies the location to insert this block.<br />For example, "@opening_p" for the beginning of any paragraph, or "@closing_p" for the end of any paragraph.', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
+  $target_substring_description = t('Case sensitive string within the target block that identifies the location to insert this block. The block will not be displayed if the string is not in the target block.<br />For example, "@opening_p" for the beginning of any paragraph, or "@closing_p" for the end of any paragraph.', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
   $form['visibility']['block_in_block']['block_in_block_target_substring'] = array(
     '#type' => 'textfield',
     '#title' => t('Where to insert'),
@@ -1073,6 +1143,14 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
     BLOCK_IN_BLOCK_BEFORE_TARGET => t('Before String'),
     BLOCK_IN_BLOCK_REPLACE_TARGET => t('Replace String'),
   );
+
+  // Allow modules to alter, or add their own insertion types.
+  $new_insertion_types = module_invoke_all('block_in_block_add_insertion_types');
+  foreach ($new_insertion_types as $new_insertion_type) {
+    $insertion_types[] = $new_insertion_type;
+  }
+  drupal_alter('block_in_block_insertion_types', $insertion_types);
+
   $form['visibility']['block_in_block']['block_in_block_insertion_type'] = array(
     '#type' => 'select',
     '#options' => $insertion_types,
@@ -1082,18 +1160,18 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
   );
   $occurrences_description = t(
     'The occurrence of <span class="block-in-block-where-to-insert">the "Where to insert" string</span> to insert the block at.
-   A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first occurrence, 2 for the second, etc).
-   A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last occurrence, -2 for the second to last, etc).
+   A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first, 2 for the second, etc).
+   A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last, -2 for the second to last, etc).
    A <span class="block-in-block-occurrence-example">0 (zero)</span> is all occurrences.
    A <span class="block-in-block-occurrence-example">"nth-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
    <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered;
-    <span class="block-in-block-occurrence-example">3n</span>: every third; <span class="block-in-block-occurrence-example">-n+3</span>: the first three; etc.
-    Place a <span class="block-in-block-occurrence-example">comma (",") between occurrences</span> to combine their rules: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence;
-    <span class="block-in-block-occurrence-example">3n,-1</span>: every third, plus the last.
-    Place the <span class="block-in-block-occurrence-example">negation operator ("!") before an occurrence</span> to prevent the block from being inserted there: <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
-    The order does not matter, and having multiple occurrences will not cause the block to be inserted more than once at the same occurrence.
-    For example, <span class="block-in-block-occurrence-example">"3,3n,2n+1"</span> will insert the block only one time at the third occurrence, not three times.
-    The block will not be displayed if <span class="block-in-block-where-to-insert">the "Where to insert" string</span> is not found, or if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
+    <span class="block-in-block-occurrence-example">3n</span>: every third; etc.
+    Place a <span class="block-in-block-occurrence-example">comma (",") between occurrences</span> to combine their rules: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence.
+    Place the <span class="block-in-block-occurrence-example">negation operator ("!") before an occurrence</span> to prevent the block from being inserted there:
+    <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
+    The order does not matter, and this block will never be inserted more than once at the same occurrence.
+    (<span class="block-in-block-occurrence-example">"3,3n,2n+1"</span> will not insert the block three times at the third occurrence).
+    The block will not be displayed if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
   );
 
   $form['visibility']['block_in_block']['block_in_block_occurrences'] = array(
@@ -1555,9 +1633,17 @@ function _block_in_block_is_valid_occurrence($occurrence, &$error_messages = arr
       $error_messages = array_merge($error_messages, $nth_occurrence_errors);
     }
     else {
-      // TODO: Create hooks for custom occurrence type
-      // Use a key to prevent this error from being shown more than once.
-      $error_messages['unknown'] = t('A valid occurrence can be an integer, or an expression in the form: "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.');
+      // Allow modules to validate custom occurrence types.
+      $custom_error_messages = array();
+      drupal_alter('block_in_block_is_valid_occurrence', $is_valid, $custom_error_messages, $occurrence);
+
+      if (!empty($custom_error_messages)) {
+        $error_messages = array_merge($error_messages, $custom_error_messages);
+      }
+      elseif (!$is_valid) {
+        // Using a key to prevent this error from being shown more than once.
+        $error_messages['unknown'] = t('A valid occurrence can be an integer, or an expression in the form: "n", "an", or "an+b", where "n" is the literal letter "n", "a" and "b" are integers, and "a" does not equal zero.');
+      }
     }
   }
   return $is_valid;
@@ -1574,7 +1660,7 @@ function _block_in_block_is_valid_occurrence($occurrence, &$error_messages = arr
  * @return bool
  *   TRUE if valid, FALSE otherwise.
  *
- * @see _block_in_block_insert_at_nth_occurrence()
+ * @see _block_in_block_insert_placeholders_at_nth_occurrence()
  *   For more information about nth-occurrence expressions.
  */
 function _block_in_block_is_valid_nth_occurrence($expression, &$error_messages = array()) {
