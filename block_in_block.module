@@ -48,28 +48,27 @@
  * relation to the original content.
  *
  * Key functions in order of execution:
- * block_in_block_block_list_alter()
+ * @see block_in_block_block_list_alter()
  *   Identification of blocks to insert.
- * _block_in_block_store_block_to_insert()
+ * @see _block_in_block_store_block_to_insert()
  *   Processes a block's insertion settings to determine its insertion group.
- * _block_in_block_add_block_to_insertion_group()
+ * @see _block_in_block_add_block_to_insertion_group()
  *   Where the block is added to the insertion group within the blocks_to_insert
  *   array. Also where the placeholder for the insertion group is generated and
  *   associated with its corresponding block(s).
- * block_in_block_preprocess_node()
- *  Identifies if the "Main page content" block is a target block. If it is, it
+ * @see block_in_block_preprocess_node()
+ *  Identifies if the "Main page content" block is a target block. If it is,
  *  calls _block_in_block_get_content_with_insertions().
- * block_in_block_preprocess_block()
+ * @see block_in_block_preprocess_block()
  *  Identification of target blocks for block types other than the Main page
  *  content block. Also calls _block_in_block_get_content_with_insertions().
- * _block_in_block_get_content_with_insertions()
+ * @see _block_in_block_get_content_with_insertions()
  *   Calls the next two functions to insert the placeholders and replace them
  *   with the contents of the blocks being inserted.
- * _block_in_block_get_content_with_placeholders()
- *   Placeholders are inserted into target blocks.
- * _block_in_block_replace_all_placeholders()
- *  Placeholders replaced with the rendered content of their corresponding
- *  blocks.
+ * @see _block_in_block_get_content_with_placeholders()
+ *   Initiates processing of insertion groups to insert placeholders.
+ * @see _block_in_block_replace_all_placeholders()
+ *  Placeholders replaced with the rendered content of blocks.
  */
 
 /**
@@ -240,28 +239,22 @@ function _block_in_block_get_block_key_parts($block) {
  *   FALSE if settings matching the request are not in the block_in_block table.
  *   An array of insertion settings for multiple blocks.
  *   An associative array containing the insertion settings of one block.
- *   An insertion settings array has the following structure:
- *   - enabled: TRUE if the block should be inserted into another block, or
- *     FALSE otherwise.
- *   - target_blocks: an associative array containing information about the
- *     block being inserted into (the "node_types" array element is present only
- *     if the target block is "Main page content"):
- *     - theme_key: Associative array:
- *       - 'block_key': String of the block key for the target block.
- *       - 'node_types': Associative array:
- *       -   node_type_key: Associative array:
- *           - view_mode_key: String of the view mode key (again), or 0 if the
- *             block should not be inserted in that view mode for the node type.
- *       )
- *   - target_substring: a string to be found within the target blocks, used to
- *     identify the location to insert.
- *   - insertion_type: a string indicating how the block should be inserted,
- *     relative to the target_substring. Possible values:
- *       'after': the block should be inserted after the target substring.
- *       'before': the block should be inserted before the target substring.
- *       'replace': the block should replace the target substring.
- *   - occurrences: string of comma separated values indicating the occurrences
- *     of the target_substring that should be used for inserting the block.
+ *
+ *   The settings array has a structure similar to the following:
+ *    'enabled' => TRUE if configured to be inserted, FALSE if not,
+ *    'target_substring' => [TARGET_SUBSTRING]
+ *    'insertion_type' => [INSERTION_TYPE] ('before', 'after' or 'replace'),
+ *    'occurrences': [OCCURRENCES] (comma separated string),
+ *    'target_blocks' => array(
+ *      [THEME_KEY_1] => array(
+ *        'block_key' => [TARGET_BLOCK_KEY] (block key of block to insert into),
+ *        'node_types' => array(
+ *          [NODE_TYPE_KEY_1] => array(
+ *            [VIEW_MODE_KEY_1] => [VIEW_MODE_KEY_1] to insert or 0 to not,
+ *          ),
+ *        ),
+ *      ),
+ *    ),
  *
  * @see block_in_block_get_block_key()
  *   For more information about block keys.
@@ -339,16 +332,17 @@ function _block_in_block_load_block_in_blocks() {
  * where, or how, the block should be inserted. This path along the array is
  * referred to as an "insertion group". Blocks within the same insertion group
  * will have their html inserted at the same location:
- * $target_block_key => array(
- *   $target_substring => array(
- *     $occurrences => array(
- *       $insertion_type => arry(
- *         'blocks_to_insert' => array of blocks keyed by its block_key,
- *         'insertion_group_placeholder' => $insertion_group_placeholder,
- *         'insertion_group_key' = > $insertion_group_key,
- *         'target_block_key' = > $target_block_key,
- *         'target_substring' = > $target_substring,
- *         'occurrences' = > $occurrences,
+ * [TARGET_BLOCK_KEY] => array(
+ *   [TARGET_SUBSTRING] => array(
+ *     [OCCURRENCES] => array(
+ *       [INSERTION_TYPE] => array(
+ *         'blocks_to_insert' => array of block objects keyed by block_key,
+ *         'insertion_group_placeholder' => [INSERTION_GROUP_PLACEHOLDER],
+ *         'insertion_group_key' = > [INSERTION_GROUP_KEY],
+ *         'target_block_key' = > [TARGET_BLOCK_KEY],
+ *         'target_substring' = > [TARGET_SUBSTRING],
+ *         'occurrences' = > [OCCURRENCES],
+ *         'insertion_type' = > [INSERTION_TYPE],
  *       )
  *     )
  *   )
@@ -403,21 +397,21 @@ function _block_in_block_store_block_to_insert($block) {
  * structure than other blocks. This is because blocks being inserted into the
  * Main page content can be configured to be inserted only for certain
  * node_types and view_modes:
- * $target_block_key => array(
- *   $node_type => array(
- *     $view_mode => array(
- *       $target_substring => array(
- *         $occurrences => array(
- *           $insertion_type => arry(
- *             'blocks_to_insert' => array of blocks keyed by its block_key,
- *             'insertion_group_placeholder' => $insertion_group_placeholder,
- *             'insertion_group_key' = > $insertion_group_key,
- *             'target_block_key' = > $target_block_key,
- *             'node_type' = > $node_type,
- *             'view_mode' = > $view_mode,
- *             'target_substring' = > $target_substring,
- *             'occurrences' = > $occurrences,
- *             'insertion_type' = > $insertion_type,
+ * [TARGET_BLOCK_KEY] => array(
+ *   [NODE_TYPE_KEY] => array(
+ *     [VIEW_MODE_KEY] => array(
+ *       [TARGET_SUBSTRING] => array(
+ *         [OCCURRENCES] => array(
+ *           [INSERTION_TYPE] => arry(
+ *             'blocks_to_insert' => array of block objects keyed by block_key,
+ *             'insertion_group_placeholder' => [INSERTION_GROUP_PLACEHOLDER],
+ *             'insertion_group_key' = > [INSERTION_GROUP_KEY],
+ *             'target_block_key' = > [TARGET_BLOCK_KEY],
+ *             'node_type' = > [NODE_TYPE_KEY],
+ *             'view_mode' = > [VIEW_MODE_KEY],
+ *             'target_substring' = > [TARGET_SUBSTRING],
+ *             'occurrences' = > [OCCURRENCES],
+ *             'insertion_type' = > [INSERTION_TYPE],
  *           )
  *         )
  *       )
@@ -557,9 +551,10 @@ function _block_in_block_get_content_with_insertions($content_to_insert_into, $i
  * An "insertion group placeholder" is a string, unique to an insertion group,
  * that is temporarily inserted into target blocks in lieu of the actual
  * content. After all insertions have been processed (i.e. all placeholders
- * inserted), the placeholders are replaced by the content for their respective
- * insertion group. This is done to prevent conflicts when content from multiple
- * blocks is being inserted into the same target block.
+ * inserted), the placeholders are replaced by the rendered content of the
+ * blocks for their respective insertion group. This is done to prevent
+ * conflicts when content from multiple blocks is being inserted into the same
+ * target block.
  *
  * @param $content
  *   String in which the insertions are to take place.
