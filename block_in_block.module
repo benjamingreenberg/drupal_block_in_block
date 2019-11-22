@@ -472,8 +472,8 @@ function _block_in_block_store_block_to_insert_into_main_content(&$insertion_gro
  * @param $insertion_group_key
  *   String that uniquely identifies the insertion group, and is used to
  *   generate the insertion group's placehoder.
- * @param $settings
- *   Associative array containing the insertion details.
+ * @param $block
+ *   Block object with the insertion_settings array added as a property.
  *
  * @see _block_in_block_store_block_to_insert()
  *   For more information about insertion groups, and insertion group keys.
