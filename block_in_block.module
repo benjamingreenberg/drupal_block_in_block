@@ -329,7 +329,7 @@ function _block_in_block_load_block_in_blocks() {
  * Stores details about a block for later insertion.
  *
  * The details are stored using drupal_static under the name 'block_in_block',
- * and in an associative array with the key 'blocks_to_insert'. The array
+ * and in an associative array with the key 'target_blocks'. The array
  * is structured so that each of its keys contains a specific detail about
  * where, or how, the block should be inserted. This path along the array is
  * referred to as an "insertion group". Blocks within the same insertion group
@@ -374,7 +374,7 @@ function _block_in_block_store_block_to_insert($block) {
     // Only store the settings for the current theme.
     if ($target_theme_key == $theme_key) {
       $target_block_key = $target_theme_settings['block_key'];
-      $insertion_groups_for_target_block = &$block_in_block['blocks_to_insert'][$target_block_key];
+      $insertion_groups_for_target_block = &$block_in_block['target_blocks'][$target_block_key];
       if ($target_block_key == BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY) {
         _block_in_block_store_block_to_insert_into_main_content($insertion_groups_for_target_block, $target_theme_settings['node_types'], $block);
       }
@@ -496,8 +496,8 @@ function block_in_block_preprocess_block(&$variables) {
   $block_in_block = &drupal_static('block_in_block');
   $block = $variables['block'];
   $block_key = block_in_block_get_block_key($block);
-  if (isset($block_in_block['blocks_to_insert'][$block_key]) && $block_key != BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY) {
-    $insertions = $block_in_block['blocks_to_insert'][$block_key];
+  if (isset($block_in_block['target_blocks'][$block_key]) && $block_key != BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY) {
+    $insertions = $block_in_block['target_blocks'][$block_key];
     $original_content = $variables['content'];
     $content_with_insertions = _block_in_block_get_content_with_insertions($original_content, $insertions);
     $variables['content'] = $content_with_insertions;
@@ -514,8 +514,8 @@ function block_in_block_preprocess_node(&$variables, $hook) {
   $block_in_block = &drupal_static('block_in_block');
   $node_type = $variables['type'];
   $view_mode = $variables['view_mode'];
-  if (isset($block_in_block['blocks_to_insert'][BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY][$node_type][$view_mode])) {
-    $insertions = $block_in_block['blocks_to_insert'][BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY][$node_type][$view_mode];
+  if (isset($block_in_block['target_blocks'][BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY][$node_type][$view_mode])) {
+    $insertions = $block_in_block['target_blocks'][BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY][$node_type][$view_mode];
     $original_content = $variables['content']['body'][0]['#markup'];
     $content_with_insertions = _block_in_block_get_content_with_insertions($original_content, $insertions);
     $variables['content']['body'][0]['#markup'] = $content_with_insertions;
