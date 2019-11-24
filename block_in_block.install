@@ -72,3 +72,38 @@ function block_in_block_install() {
     ->condition('name', 'block_in_block', '=')
     ->execute();
 }
+
+/**
+ * Add 'view_modes' key to json in target_blocks field in block_in_block table.
+ */
+function block_in_block_update_7101() {
+  // Consequence of making each fieldset containing view mode checkboxes
+  // collapsable. See Issue #3095776:
+  // https://www.drupal.org/project/block_in_block/issues/3095776
+  if (db_table_exists('block_in_block')) {
+    $query = db_select('block_in_block', 'b')
+      ->fields(
+        'b',
+        array(
+          'module',
+          'delta',
+          'target_blocks',
+        )
+      );
+    $query->addExpression("CONCAT(b.module, '_', b.delta)", 'block_key');
+    $blocks = $query->execute()->fetchAllAssoc('block_key', PDO::FETCH_ASSOC);
+    foreach ($blocks as $block) {
+      $target_blocks = json_decode($block['target_blocks'], TRUE);
+      foreach ($target_blocks as $theme_key => $theme) {
+        foreach ($theme['node_types'] as $node_type => $view_modes) {
+          $target_blocks[$theme_key]['node_types'][$node_type] = array('view_modes' => $view_modes);
+          db_update('block_in_block')
+            ->fields(array('target_blocks' => json_encode($target_blocks)))
+            ->condition('module', $block['module'])
+            ->condition('delta', $block['delta'])
+            ->execute();
+        }
+      }
+    }
+  }
+}
