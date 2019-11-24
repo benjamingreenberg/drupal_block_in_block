@@ -1086,22 +1086,7 @@ function block_in_block_form_block_add_block_form_alter(&$form, &$form_state) {
  * @see block_admin_configure()
  */
 function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
-  $enabled = 0;
-  $target_blocks = array();
-  $target_substring = '';
-  $insertion_type = BLOCK_IN_BLOCK_AFTER_TARGET;
-  $occurrences = 1;
-
-  $defaults = block_in_block_get_block_insertion_settings($form, TRUE);
-  if ($defaults) {
-    $enabled = $defaults['enabled'];
-    $target_blocks = $defaults['target_blocks'];
-    $target_substring = $defaults['target_substring'];
-    $insertion_type = $defaults['insertion_type'];
-    $occurrences = $defaults['occurrences'];
-  }
-
-  $form['visibility']['block_in_block'] = array(
+  $block_in_block_fieldset = array(
     '#type' => 'fieldset',
     '#title' => t('Within another block'),
     '#collapsible' => TRUE,
@@ -1114,85 +1099,73 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
       'css' => array(drupal_get_path('module', 'block_in_block') . '/style/block_in_block_admin.css'),
     ),
   );
+  $defaults = block_in_block_get_configure_form_defaults($form);
+  $block_in_block_fieldset['block_in_block_enabled'] = _block_in_block_get_enabled_checkbox_field($defaults['enabled']);
+  $block_in_block_fieldset['block_in_block_target_blocks'] = _block_in_block_get_target_block_fieldset($form, $defaults['target_blocks']);
+  $block_in_block_fieldset['block_in_block_target_substring'] = _block_in_block_get_target_substring_textfield($defaults['target_substring']);
+  $block_in_block_fieldset['block_in_block_insertion_type'] = _block_in_block_get_insertion_type_select_field($defaults['insertion_type']);
+  $block_in_block_fieldset['block_in_block_occurrences'] = _block_in_block_get_occurrences_textfield($defaults['occurrences']);
 
-  $form['visibility']['block_in_block']['block_in_block_enabled'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Enabled'),
-    '#description' => t('Enable to insert this Block inside another Block located in the same theme and region.'),
-    '#default_value' => $enabled,
-  );
-  $form['visibility']['block_in_block']['block_in_block_target_blocks'] = _block_in_block_get_target_block_fields($form, $target_blocks);
-  $target_substring_description = t('Case sensitive string within the target block that identifies the location to insert this block. The block will not be displayed if the string is not in the target block.<br />For example, "@opening_p" for the beginning of any paragraph, or "@closing_p" for the end of any paragraph.', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
-  $form['visibility']['block_in_block']['block_in_block_target_substring'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Where to insert'),
-    '#description' => $target_substring_description,
-    '#default_value' => $target_substring,
-    '#states' => array(
-      'required' => array(
-        ':input[name=block_in_block_enabled]' => array('checked' => TRUE),
-      ),
-    ),
-  );
-  $insertion_type_description = t('How the block should be inserted.<br /><pre>Examples: <em>Before String</em> @opening_p, to insert the block before a paragraph. <em>After String</em> @closing_p, to insert the block after a paragraph. <em>Replace String</em> !!REPLACE_THIS!!, to replace the string with the contents of the block.</pre>', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
-  $insertion_types = array(
-    BLOCK_IN_BLOCK_AFTER_TARGET => t('After String'),
-    BLOCK_IN_BLOCK_BEFORE_TARGET => t('Before String'),
-    BLOCK_IN_BLOCK_REPLACE_TARGET => t('Replace String'),
-  );
-
-  // Allow modules to alter, or add their own insertion types.
-  $new_insertion_types = module_invoke_all('block_in_block_add_insertion_types');
-  foreach ($new_insertion_types as $new_insertion_type) {
-    $insertion_types[] = $new_insertion_type;
-  }
-  drupal_alter('block_in_block_insertion_types', $insertion_types);
-
-  $form['visibility']['block_in_block']['block_in_block_insertion_type'] = array(
-    '#type' => 'select',
-    '#options' => $insertion_types,
-    '#title' => t('How to insert'),
-    '#description' => $insertion_type_description,
-    '#default_value' => $insertion_type,
-  );
-  $occurrences_description = t(
-    'The occurrence of <span class="block-in-block-where-to-insert">the "Where to insert" string</span> to insert the block at.
-   A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first, 2 for the second, etc).
-   A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last, -2 for the second to last, etc).
-   A <span class="block-in-block-occurrence-example">0 (zero)</span> is all occurrences.
-   A <span class="block-in-block-occurrence-example">"nth-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
-   <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered;
-    <span class="block-in-block-occurrence-example">3n</span>: every third; etc.
-    Place a <span class="block-in-block-occurrence-example">comma (",") between occurrences</span> to combine their rules: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence.
-    Place the <span class="block-in-block-occurrence-example">negation operator ("!") before an occurrence</span> to prevent the block from being inserted there:
-    <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
-    The order does not matter, and this block will never be inserted more than once at the same occurrence.
-    (<span class="block-in-block-occurrence-example">"3,3n,2n+1"</span> will not insert the block three times at the third occurrence).
-    The block will not be displayed if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
-  );
-
-  $form['visibility']['block_in_block']['block_in_block_occurrences'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Occurrences to insert at'),
-    '#description' => $occurrences_description,
-    '#default_value' => $occurrences,
-    '#states' => array(
-      'required' => array(
-        ':input[name=block_in_block_enabled]' => array('checked' => TRUE),
-      ),
-    ),
-  );
+  $form['visibility']['block_in_block'] = $block_in_block_fieldset;
   $form['#validate'][] = '_block_in_block_form_block_admin_configure_validate';
   $form['#submit'][] = 'block_in_block_form_block_admin_configure_submit';
   return $form;
 }
 
 /**
- * Creates a collection of select fields of blocks in regions grouped by theme.
+ * Returns default values for Block in Block fields in a configuration form.
+ *
+ * @param $form
+ *   The configuration form.
+ *
+ * @return array
+ *   Associative array containing the default values.
+ */
+function block_in_block_get_configure_form_defaults($form) {
+  $defaults = array(
+    'enabled' => 0,
+    'target_blocks' => array(),
+    'target_substring' => '',
+    'insertion_type' => BLOCK_IN_BLOCK_AFTER_TARGET,
+    'occurrences' => 1,
+  );
+
+  $insertion_settings = block_in_block_get_block_insertion_settings($form, TRUE);
+  if ($insertion_settings) {
+    $defaults['enabled'] = $insertion_settings['enabled'];
+    $defaults['target_blocks'] = $insertion_settings['target_blocks'];
+    $defaults['target_substring'] = $insertion_settings['target_substring'];
+    $defaults['insertion_type'] = $insertion_settings['insertion_type'];
+    $defaults['occurrences'] = $insertion_settings['occurrences'];
+  }
+  return $defaults;
+}
+
+/**
+ * Returns a checkbox field for the Block in Block 'enabled' setting.
+ *
+ * @param $default_enabled
+ *   Integer with the default value of the checkbox field.
+ *
+ * @return array
+ *   Associative array of the checkbox field.
+ */
+function _block_in_block_get_enabled_checkbox_field($default_enabled) {
+  $checkbox = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enabled'),
+    '#description' => t('Enable to insert this Block inside another Block located in the same theme and region.'),
+    '#default_value' => $default_enabled,
+  );
+  return $checkbox;
+}
+
+/**
+ * Returns fieldset to select target blocks, node types and view modes by theme.
  *
  * @param $form
  *   Array of form elements that the select fields are to be placed into.
- * @param $selected_target_blocks
+ * @param $default_target_blocks
  *   Associative array containing the block key for selected/default blocks,
  *   keyed by theme, or an empty array if no defaults.
  *
@@ -1205,7 +1178,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
  * @see block_in_block_get_block_key()
  *   For more information about block keys.
  */
-function _block_in_block_get_target_block_fields($form, $selected_target_blocks) {
+function _block_in_block_get_target_block_fieldset($form, $default_target_blocks) {
   $fields = array(
     '#tree' => TRUE,
     'themes' => array(
@@ -1219,20 +1192,11 @@ function _block_in_block_get_target_block_fields($form, $selected_target_blocks)
     if ($theme->status == 1) {
       $theme_regions = $form['regions'][$theme_key];
       $default_target_block = '0';
-      if (isset($selected_target_blocks[$theme_key])) {
-        $default_target_block = $selected_target_blocks[$theme_key];
+      if (isset($default_target_blocks[$theme_key])) {
+        $default_target_block = $default_target_blocks[$theme_key];
       }
-      $fields['themes'][$theme_key] = array(
-        '#tree' => TRUE,
-        'block_key' => array(
-          '#type' => 'fieldset',
-        ),
-        'node_types' => array(
-          '#type' => 'fieldset',
-        ),
-      );
-      $select_field = _block_in_block_get_target_block_select_field($theme, $theme_regions, $default_target_block, $this_block_key);
-      $fields['themes'][$theme_key]['block_key'] = $select_field;
+      $target_block_select_field = _block_in_block_get_target_block_select_field($theme, $theme_regions, $default_target_block, $this_block_key);
+      $fields['themes'][$theme_key]['block_key'] = $target_block_select_field;
       $default_view_modes_by_node_type = array();
       if (isset($default_target_block['node_types'])) {
         $default_view_modes_by_node_type = $default_target_block['node_types'];
@@ -1245,7 +1209,7 @@ function _block_in_block_get_target_block_fields($form, $selected_target_blocks)
 }
 
 /**
- * Creates a select field who's options are blocks assigned to a theme's region.
+ * Returns a select field whose options are blocks assigned to a theme's region.
  *
  * @param $theme
  *   The theme that the region belongs to.
@@ -1267,19 +1231,19 @@ function _block_in_block_get_target_block_fields($form, $selected_target_blocks)
  */
 function _block_in_block_get_target_block_select_field($theme, $theme_regions, $default_target_block, $block_key_to_exclude = FALSE) {
   $theme_name = $theme->info['name'];
-  $description = t('To insert this block into another block within the @theme_name theme, you must first select a region for the @theme_name theme in "Region Settings", and then save the block.', array('@theme_name' => $theme_name));
+  $description = t('To insert this block into another block within @theme_name, you must first select a region for @theme_name in "Region Settings", and then save the block.', array('@theme_name' => $theme_name));
   $blocks_in_region = array('0' => 'None');
   $region_key = $theme_regions['#default_value'];
   if ($region_key) {
     $region_name = $theme_regions['#options'][$region_key];
-    $description = t('The block that this block will be inserted into when displayed in the @region_name region of the @theme_name theme.', array('@region_name' => $region_name, '@theme_name' => $theme_name));
+    $description = t('The block that this block will be inserted into when displayed in the @region_name region of @theme_name.', array('@region_name' => $region_name, '@theme_name' => $theme_name));
     $blocks_in_region = _block_in_block_get_blocks_in_theme_region($theme->name, $region_key, $block_key_to_exclude);
   }
 
   $select_field = array(
     '#type' => 'select',
     '#options' => $blocks_in_region,
-    '#title' => t('@theme_name theme', array('@theme_name' => $theme_name)),
+    '#title' => $theme_name,
     '#description' => $description,
     '#default_value' => $default_target_block,
     '#attributes' => array('class' => array('block-in-block-target-block')),
@@ -1455,6 +1419,106 @@ function _block_in_block_get_node_type_view_mode_fields($node_type_key, $node_ty
     '#description' => $description,
   );
   return $view_modes_checkboxes;
+}
+
+/**
+ * Returns a textfield for the Block in Block 'target substring' setting.
+ *
+ * @param $default_target_substring
+ *   String with the default value of the field.
+ *
+ * @return array
+ *   Associative array of a textfield.
+ */
+function _block_in_block_get_target_substring_textfield($default_target_substring) {
+  $description = t('Case sensitive string within the target block that identifies the location to insert this block. The block will not be displayed if the string is not in the target block.<br />For example, "@opening_p" for the beginning of any paragraph, or "@closing_p" for the end of any paragraph.', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
+  $textfield = array(
+    '#type' => 'textfield',
+    '#title' => t('Where to insert'),
+    '#description' => $description,
+    '#default_value' => $default_target_substring,
+    '#states' => array(
+      'required' => array(
+        ':input[name=block_in_block_enabled]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+
+  return $textfield;
+}
+
+/**
+ * Returns a select field for the Block in Block 'insertion type' setting.
+ *
+ * @param $default_insertion_type
+ *   String with the default value of the field.
+ *
+ * @return array
+ *   Associative array of a select field.
+ */
+function _block_in_block_get_insertion_type_select_field($default_insertion_type) {
+  $insertion_type_description = t('How the block should be inserted.<br /><pre>Examples: <em>Before String</em> @opening_p, to insert the block before a paragraph. <em>After String</em> @closing_p, to insert the block after a paragraph. <em>Replace String</em> !!REPLACE_THIS!!, to replace the string with the contents of the block.</pre>', array('@opening_p' => '<p>', '@closing_p' => '</p>'));
+  $insertion_types = array(
+    BLOCK_IN_BLOCK_AFTER_TARGET => t('After String'),
+    BLOCK_IN_BLOCK_BEFORE_TARGET => t('Before String'),
+    BLOCK_IN_BLOCK_REPLACE_TARGET => t('Replace String'),
+  );
+
+  // Allow modules to alter or add their own insertion types.
+  $new_insertion_types = module_invoke_all('block_in_block_add_insertion_types');
+  foreach ($new_insertion_types as $new_insertion_type) {
+    $insertion_types[] = $new_insertion_type;
+  }
+  drupal_alter('block_in_block_insertion_types', $insertion_types);
+
+  $select_field = array(
+    '#type' => 'select',
+    '#options' => $insertion_types,
+    '#title' => t('How to insert'),
+    '#description' => $insertion_type_description,
+    '#default_value' => $default_insertion_type,
+  );
+  return $select_field;
+}
+
+/**
+ * Returns a textfield for the Block in Block 'occurrences' setting.
+ *
+ * @param $default_occurrences
+ *   String with the default value of the field.
+ *
+ * @return array
+ *   Associative array of a textfield.
+ */
+function _block_in_block_get_occurrences_textfield($default_occurrences) {
+  $occurrences_description = t(
+    'The occurrence of <span class="block-in-block-where-to-insert">the "Where to insert" string</span> to insert the block at.
+   A <span class="block-in-block-occurrence-example">positive number</span> is the specific occurrence to insert at (1 for the first, 2 for the second, etc).
+   A <span class="block-in-block-occurrence-example">negative number</span> begins counting from the end (-1 for the last, -2 for the second to last, etc).
+   A <span class="block-in-block-occurrence-example">0 (zero)</span> is all occurrences.
+   A <span class="block-in-block-occurrence-example">"nth-occurrence"</span> expression, which borrows its format from the CSS pseudo-class nth-of-type().
+   <span class="block-in-block-occurrence-example">2n</span>: even numbered; <span class="block-in-block-occurrence-example">2n+1</span>: odd numbered;
+    <span class="block-in-block-occurrence-example">3n</span>: every third; etc.
+    Place a <span class="block-in-block-occurrence-example">comma (",") between occurrences</span> to combine their rules: <span class="block-in-block-occurrence-example">1,-1</span>: the first and last occurrence.
+    Place the <span class="block-in-block-occurrence-example">negation operator ("!") before an occurrence</span> to prevent the block from being inserted there:
+    <span class="block-in-block-occurrence-example">3n,-1,!-2</span>: every third, plus the last, but never the second-to-last.
+    The order does not matter, and this block will never be inserted more than once at the same occurrence.
+    (<span class="block-in-block-occurrence-example">"3,3n,2n+1"</span> will not insert the block three times at the third occurrence).
+    The block will not be displayed if there are less occurrences than what is entered (e.g. set to 3, but there are only 2 occurrences).'
+  );
+
+  $textfield = array(
+    '#type' => 'textfield',
+    '#title' => t('Occurrences to insert at'),
+    '#description' => $occurrences_description,
+    '#default_value' => $default_occurrences,
+    '#states' => array(
+      'required' => array(
+        ':input[name=block_in_block_enabled]' => array('checked' => TRUE),
+      ),
+    ),
+  );
+  return $textfield;
 }
 
 /**
