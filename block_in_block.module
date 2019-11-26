@@ -1337,18 +1337,14 @@ function _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_n
       ),
     ),
   );
-  $node_info = entity_get_info('node');
-  $all_node_types = $node_info['bundles'];
-  $all_view_modes = $node_info['view modes'];
   if (isset($form['visibility']['node_type']['types']['#options'])) {
-    $selectable_node_types = array_keys($form['visibility']['node_type']['types']['#options']);
-    foreach ($selectable_node_types as $node_type_key) {
-      $node_type_name = $all_node_types[$node_type_key]['label'];
+    $selectable_node_types = $form['visibility']['node_type']['types']['#options'];
+    foreach ($selectable_node_types as $node_type_key => $node_type_name) {
       $default_view_modes = array();
       if (isset($default_view_modes_by_node_type[$node_type_key]['view_modes'])) {
         $default_view_modes = $default_view_modes_by_node_type[$node_type_key]['view_modes'];
       }
-      $node_type_fieldset = _block_in_block_get_node_type_fieldset($node_type_key, $node_type_name, $all_view_modes, $default_view_modes);
+      $node_type_fieldset = _block_in_block_get_node_type_fieldset($node_type_name, $default_view_modes);
       $fieldset[$node_type_key] = $node_type_fieldset;
     }
   }
@@ -1358,19 +1354,15 @@ function _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_n
 /**
  * Returns a fieldset for a node type with a checkbox field for each view mode.
  *
- * @param $node_type_key
- *   String identifying the node type.
  * @param $node_type_name
  *   String of the human readable name of the node type.
- * @param $all_view_modes
- *   Associative array of all view modes for the given node type.
  * @param $default_view_modes
  *   Associative array of view modes whose checkboxes should be selected.
  *
  * @return array
  *   Associative array of a fieldset.
  */
-function _block_in_block_get_node_type_fieldset($node_type_key, $node_type_name, $all_view_modes, $default_view_modes) {
+function _block_in_block_get_node_type_fieldset($node_type_name, $default_view_modes) {
   // Expand the fieldset if any view mode checkboxes are checked.
   $collapsed = TRUE;
   if ($default_view_modes) {
@@ -1388,7 +1380,7 @@ function _block_in_block_get_node_type_fieldset($node_type_key, $node_type_name,
     '#collapsible' => TRUE,
     '#collapsed' => $collapsed,
   );
-  $view_modes_checkboxes = _block_in_block_get_node_type_view_mode_fields($node_type_key, $node_type_name, $all_view_modes, $default_view_modes);
+  $view_modes_checkboxes = _block_in_block_get_node_type_view_mode_fields($node_type_name, $default_view_modes);
   $fieldset['view_modes'] = $view_modes_checkboxes;
   return $fieldset;
 }
@@ -1396,36 +1388,45 @@ function _block_in_block_get_node_type_fieldset($node_type_key, $node_type_name,
 /**
  * Returns checkboxes field of view modes for a node type.
  *
- * @param $node_type_key
- *   String identifying the node type.
  * @param $node_type_name
  *   String of the human readable name of the node type.
- * @param $all_view_modes
- *   Associative array of all view modes keyed by node type.
  * @param $default_view_modes
- *   Associative array of view modes that make up the default values of the
- *   checkboxes.
+ *   Associative array of view modes whose checkboxes should be selected.
  *
  * @return array
  *   Associative array of checkboxes field.
  *
  * @see _block_in_block_get_node_types_fieldset()
  */
-function _block_in_block_get_node_type_view_mode_fields($node_type_key, $node_type_name, $all_view_modes, $default_view_modes) {
-  $view_mode_options = array('full' => 'Full content');
-  $view_modes_for_node_type = array_keys(field_view_mode_settings('node', $node_type_key));
-  foreach ($view_modes_for_node_type as $view_mode_key) {
-    $view_mode_options[$view_mode_key] = $all_view_modes[$view_mode_key]['label'];
-  }
+function _block_in_block_get_node_type_view_mode_fields($node_type_name, $default_view_modes) {
   $description = t('The block will only be inserted when the @node_type_name is displayed in one of the selected view modes.', array('@node_type_name' => $node_type_name));
   $view_modes_checkboxes = array(
     '#type' => 'checkboxes',
     '#default_value' => $default_view_modes,
-    '#options' => $view_mode_options,
+    '#options' => _block_in_block_get_view_modes_options_array(),
     '#attributes' => array('class' => array('block-in-block-view_modes')),
     '#description' => $description,
   );
   return $view_modes_checkboxes;
+}
+
+/**
+ * Returns an array of view modes to use as the options element of a form field.
+ *
+ * @return array
+ * Associative array of view mode names keyed by their machine name.
+ */
+function _block_in_block_get_view_modes_options_array() {
+  $view_mode_options = &drupal_static(__FUNCTION__);
+  if (!isset($view_mode_options)) {
+    $node_info = entity_get_info('node');
+    $view_modes = $node_info['view modes'];
+    $view_mode_options = array();
+    foreach ($view_modes as $view_mode_key => $view_mode_info) {
+      $view_mode_options[$view_mode_key] = $view_mode_info['label'];
+    }
+  }
+  return $view_mode_options;
 }
 
 /**
