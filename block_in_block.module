@@ -1819,7 +1819,7 @@ function block_in_block_form_block_admin_configure_submit($form, &$form_state) {
  *
  * @see block_admin_display_form()
  */
-function block_in_block_form_block_admin_display_form_alter(&$form, &$form_state, $blocks, $theme, $block_regions = NULL) {
+function block_in_block_form_block_admin_display_form_alter(&$form, &$form_state) {
   $blocks_being_inserted = block_in_block_get_block_insertion_settings(NULL, TRUE);
   $blocks_to_delete = array();
   $theme = $form['edited_theme']['#value'];
