@@ -1829,6 +1829,9 @@ function block_in_block_form_block_admin_display_form_alter(&$form, &$form_state
         $target_block_key = $settings['target_blocks'][$theme]['block_key'];
         if (isset($form['blocks'][$target_block_key])) {
           $target_block_name = $form['blocks'][$target_block_key]['info']['#markup'];
+          if (strlen($target_block_name) > 20) {
+            $target_block_name = substr($target_block_name, 0, 20) . '...';
+          }
           $form['blocks'][$block_key]['info']['#markup'] .= ' ' . t('(within @target_block_name)', array('@target_block_name' => $target_block_name));
         }
       }
