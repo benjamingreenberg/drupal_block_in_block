@@ -640,7 +640,7 @@ function _block_in_block_get_content_with_placeholders_at_occurrences($content, 
       _block_in_block_insert_placeholders_at_occurrence($content_parts, $insertion_groups_by_insertion_type, $content_indexes_used, $occurrence);
     }
   }
-  $content_with_placeholders = implode(' ', $content_parts);
+  $content_with_placeholders = implode('', $content_parts);
   return $content_with_placeholders;
 }
 
