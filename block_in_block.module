@@ -371,13 +371,15 @@ function _block_in_block_store_block_to_insert($block) {
   $block->insertion_settings = &$settings;
   global $theme_key;
   foreach ($settings['target_blocks'] as $target_theme_key => $target_theme_settings) {
-    // Only store the settings for the current theme.
-    if ($target_theme_key == $theme_key) {
-      $block_in_block['blocks_to_insert'][$block_key] = $target_theme_settings;
-      $target_block_key = $target_theme_settings['block_key'];
+    $region = $block->region;
+    // Only store the settings for the current theme and region.
+    if ($target_theme_key == $theme_key && isset($target_theme_settings['regions'][$region])) {
+      $target_theme_region_settings = $target_theme_settings['regions'][$region];
+      $block_in_block['blocks_to_insert'][$block_key] = $target_theme_region_settings;
+      $target_block_key = $target_theme_region_settings['block_key'];
       $insertion_groups_for_target_block = &$block_in_block['target_blocks'][$target_block_key];
       if ($target_block_key == BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY) {
-        _block_in_block_store_block_to_insert_into_main_content($insertion_groups_for_target_block, $target_theme_settings['node_types'], $block);
+        _block_in_block_store_block_to_insert_into_main_content($insertion_groups_for_target_block, $target_theme_region_settings['node_types'], $block);
       }
       else {
         $insertion_group = &$insertion_groups_for_target_block[$settings['target_substring']][$settings['occurrences']][$settings['insertion_type']];
@@ -1108,7 +1110,7 @@ function block_in_block_form_block_admin_configure_alter(&$form, &$form_state) {
   );
   $defaults = block_in_block_get_configure_form_defaults($form);
   $block_in_block_fieldset['block_in_block_enabled'] = _block_in_block_get_enabled_checkbox_field($defaults['enabled']);
-  $block_in_block_fieldset['block_in_block_target_blocks'] = _block_in_block_get_target_block_fieldset($form, $defaults['target_blocks']);
+  $block_in_block_fieldset['block_in_block_target_blocks'] = _block_in_block_get_target_block_fieldset($form, $form_state, $defaults['target_blocks']);
   $block_in_block_fieldset['block_in_block_target_substring'] = _block_in_block_get_target_substring_textfield($defaults['target_substring']);
   $block_in_block_fieldset['block_in_block_insertion_type'] = _block_in_block_get_insertion_type_select_field($defaults['insertion_type']);
   $block_in_block_fieldset['block_in_block_occurrences'] = _block_in_block_get_occurrences_textfield($defaults['occurrences']);
@@ -1170,23 +1172,26 @@ function _block_in_block_get_enabled_checkbox_field($default_enabled) {
 /**
  * Returns fieldset to select target blocks, node types and view modes by theme.
  *
+ * If the block is not assigned to a region for a theme, then the fieldset will
+ * contain markup explaining a region needs to be assigned first.
+ *
  * @param $form
  *   Array of form elements that the select fields are to be placed into.
+ * @param $form_state
+ *   Array of metadata about state of form processing.
  * @param $default_target_blocks
  *   Associative array containing the block key for selected/default blocks,
  *   keyed by theme, or an empty array if no defaults.
  *
  * @return array
- *   Associative array of select fields, keyed by Drupal theme.
+ *   Associative array of a fieldset with markup and/or field elements.
  *
- * @see _block_in_block_get_target_block_select_field()
- *   For more information about the select field.
  * @see block_in_block_form_block_admin_configure_alter()
  * @see block_in_block_get_block_key()
  *   For more information about block keys.
  */
-function _block_in_block_get_target_block_fieldset($form, $default_target_blocks) {
-  $fields = array(
+function _block_in_block_get_target_block_fieldset($form, $form_state, $default_target_blocks) {
+  $fieldset = array(
     '#tree' => TRUE,
     'themes' => array(
       '#type' => 'fieldset',
@@ -1194,25 +1199,108 @@ function _block_in_block_get_target_block_fieldset($form, $default_target_blocks
     ),
   );
   $this_block_key = block_in_block_get_block_key($form);
-  $themes = list_themes();
-  foreach ($themes as $theme_key => $theme) {
-    if ($theme->status == 1) {
-      $theme_regions = $form['regions'][$theme_key];
+
+  // If the form is loading after a submit, it's possible the user has changed
+  // the regions the block is assigned to, which would affect how the fieldset
+  // should be built.
+  $is_form_reloading_after_submit = FALSE;
+  $form_input = $form_state['input'];
+  if ($form_input) {
+    $is_form_reloading_after_submit = TRUE;
+  }
+  // Get array of the form's region select fields keyed by theme.
+  $region_select_fields = array_intersect_key($form['regions'], array_flip(element_children($form['regions'])));
+  foreach ($region_select_fields as $theme_key => $region_select_field) {
+    $region_key = $region_select_field['#default_value'];
+    if ($is_form_reloading_after_submit  && !empty($form_input['block_in_block_enabled'])) {
+      // If the user changed the region the block is assigned to, then the
+      // new region's key needs to be used for creating the elements within the
+      // fieldset.
+      $region_key = _block_in_block_apply_region_changes($region_select_field, $default_target_blocks, $theme_key, $form_input);
+    }
+    if ($region_key) {
       $default_target_block = '0';
-      if (isset($default_target_blocks[$theme_key])) {
-        $default_target_block = $default_target_blocks[$theme_key];
+      if (isset($default_target_blocks[$theme_key]['regions'][$region_key])) {
+        $theme_region_defaults = $default_target_blocks[$theme_key]['regions'][$region_key];
+        $default_target_block = $theme_region_defaults['block_key'];
       }
-      $target_block_select_field = _block_in_block_get_target_block_select_field($theme, $theme_regions, $default_target_block, $this_block_key);
-      $fields['themes'][$theme_key]['block_key'] = $target_block_select_field;
+      $target_block_select_field = _block_in_block_get_target_block_select_field($theme_key, $region_key, $region_select_field, $default_target_block, $this_block_key);
+      $fieldset['themes'][$theme_key]['regions'][$region_key]['block_key'] = $target_block_select_field;
       $default_view_modes_by_node_type = array();
-      if (isset($default_target_block['node_types'])) {
-        $default_view_modes_by_node_type = $default_target_block['node_types'];
+      if (isset($theme_region_defaults['node_types'])) {
+        $default_view_modes_by_node_type = $theme_region_defaults['node_types'];
       }
-      $node_types_fieldset = _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_node_type, $theme_key);
-      $fields['themes'][$theme_key]['node_types'] = $node_types_fieldset;
+      $target_block_field_selector = 'select[name="block_in_block_target_blocks[themes][' . $theme_key . '][regions][' . $region_key . '][block_key]"]';
+      $node_types_fieldset = _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_node_type, $target_block_field_selector);
+      $fieldset['themes'][$theme_key]['regions'][$region_key]['node_types'] = $node_types_fieldset;
+    }
+    else {
+      $theme_name = $region_select_field['#title'];
+      $fieldset['themes'][$theme_key]['no_region_selected'] = _block_in_block_get_no_theme_region_markup($theme_key, $theme_name);
     }
   }
-  return $fields;
+  return $fieldset;
+}
+
+/**
+ * Determines the region key based on original and submitted form values.
+ *
+ * If a block that is configured to be inserted is assigned to a new region,
+ * then the region key for the new region is returned. The user is also shown
+ * a warning that the change will prevent the block from being inserted.
+ *
+ * @param $region_select_field
+ *   Associative array of the form select field to assign a region to the theme.
+ * @param $default_target_blocks
+ *   Associative array containing the block key for selected/default blocks,
+ *   keyed by theme, or an empty array if no defaults.
+ * @param $theme_key
+ *   String identifying the theme.
+ * @param $form_input
+ *   Array of unvalidated raw values entered into form fields.
+ *
+ * @return string|false
+ *   The region key, or FALSE if the block is not assigned to a region.
+ */
+function _block_in_block_apply_region_changes($region_select_field, $default_target_blocks, $theme_key, $form_input) {
+  $region_key = $region_select_field['#default_value'];
+  $original_region_key = $region_key;
+  $submitted_region_key = $form_input['regions'][$theme_key];
+  $empty_region_value = $region_select_field['#empty_value'];
+  if ($submitted_region_key != $empty_region_value) {
+    $submitted_target_block_regions = array();
+    if (isset($form_input['block_in_block_target_blocks']['themes'][$theme_key]['regions'])) {
+      $submitted_target_block_regions = $form_input['block_in_block_target_blocks']['themes'][$theme_key]['regions'];
+    }
+    // If the target block regions is missing the region key, then this is the
+    // first time the form has been submitted. Otherwise any change in the
+    // region has already been taken care of in a previous (failed) submit.
+    if (!isset($submitted_target_block_regions[$submitted_region_key])) {
+      if ($submitted_region_key != $original_region_key) {
+        // Was a target block assigned before the region change?
+        $is_target_block_in_old_region_selected = FALSE;
+        if (isset($default_target_blocks[$theme_key]['regions'][$original_region_key])) {
+          $is_target_block_in_old_region_selected = $default_target_blocks[$theme_key]['regions'][$original_region_key]['block_key'];
+        }
+        // Did the user select a target block from the old region before
+        // submitting the form?
+        if (!$is_target_block_in_old_region_selected && isset($submitted_target_block_regions[$original_region_key])) {
+          $is_target_block_in_old_region_selected = $submitted_target_block_regions[$original_region_key]['block_key'];
+        }
+        if ($is_target_block_in_old_region_selected) {
+          $theme_name = $region_select_field['#title'];
+          $new_region_name = $region_select_field['#options'][$submitted_region_key];
+          $warning_message = t('The block was configured to be inserted into another block in @theme_name, but because it was just moved into the @new_region_name region, the block it was set to insert into is no longer valid. The block will not appear in @theme_name.', array('@theme_name' => $theme_name, '@new_region_name' => $new_region_name));
+          drupal_set_message($warning_message, 'warning');
+        }
+      }
+    }
+    $region_key = $submitted_region_key;
+  }
+  else {
+    $region_key = FALSE;
+  }
+  return $region_key;
 }
 
 /**
@@ -1220,7 +1308,7 @@ function _block_in_block_get_target_block_fieldset($form, $default_target_blocks
  *
  * @param $theme
  *   The theme that the region belongs to.
- * @param $theme_regions
+ * @param $region_select_field
  *   Associative array of the form select field to assign a region to the theme.
  * @param $default_target_block
  *   String of the default value of the select field.
@@ -1236,17 +1324,13 @@ function _block_in_block_get_target_block_fieldset($form, $default_target_blocks
  * @see block_in_block_get_block_key()
  *   For more information about block keys.
  */
-function _block_in_block_get_target_block_select_field($theme, $theme_regions, $default_target_block, $block_key_to_exclude = FALSE) {
-  $theme_name = $theme->info['name'];
+function _block_in_block_get_target_block_select_field($theme_key, $region_key, $region_select_field, $default_target_block, $block_key_to_exclude = FALSE) {
+  $theme_name = $region_select_field['#title'];
   $description = t('To insert this block into another block within @theme_name, you must first select a region for @theme_name in "Region Settings", and then save the block.', array('@theme_name' => $theme_name));
   $blocks_in_region = array('0' => 'None');
-  $region_key = $theme_regions['#default_value'];
-  if ($region_key) {
-    $region_name = $theme_regions['#options'][$region_key];
-    $description = t('The block that this block will be inserted into when displayed in the @region_name region of @theme_name.', array('@region_name' => $region_name, '@theme_name' => $theme_name));
-    $blocks_in_region = _block_in_block_get_blocks_in_theme_region($theme->name, $region_key, $block_key_to_exclude);
-  }
-
+  $region_name = $region_select_field['#options'][$region_key];
+  $description = t('The block that this block will be inserted into when displayed in the @region_name region of @theme_name.', array('@region_name' => $region_name, '@theme_name' => $theme_name));
+  $blocks_in_region = _block_in_block_get_blocks_in_theme_region($theme_key, $region_key, $block_key_to_exclude);
   $select_field = array(
     '#type' => 'select',
     '#options' => $blocks_in_region,
@@ -1256,6 +1340,41 @@ function _block_in_block_get_target_block_select_field($theme, $theme_regions, $
     '#attributes' => array('class' => array('block-in-block-target-block')),
   );
   return $select_field;
+}
+
+/**
+ * Returns markup explaining to assign a region before choosing a target block.
+ *
+ * @param $theme_key
+ *   String identifying the theme.
+ * @param $theme_name
+ *   String with the human readable name of the theme.
+ *
+ * @return array
+ *   Associative array containing renderable form elements.
+ */
+function _block_in_block_get_no_theme_region_markup($theme_key, $theme_name) {
+  $markup = array('#type' => 'container');
+
+  $description_id = drupal_html_class('block-in-block-missing-region-' . $theme_key);
+  $markup['label'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<label for="' . $description_id . '">',
+    '#markup' => $theme_name,
+    '#suffix' => '</label>',
+  );
+  $description = t('To insert this block into another block within @theme_name, you must first select a region for @theme_name in "Region Settings", and then save the block.', array('@theme_name' => $theme_name));
+  $markup['description_container'] = array(
+    '#type' => 'container',
+    '#id' => $description_id,
+    '#attributes' => array(
+      'class' => array(
+        'description',
+      ),
+    ),
+  );
+  $markup['description_wrapper']['description'] = array('#markup' => $description);
+  return $markup;
 }
 
 /**
@@ -1310,8 +1429,9 @@ function _block_in_block_get_blocks_in_theme_region($theme_key, $region_key, $bl
  * @param $default_view_modes_by_node_type
  *   Associative array containing view modes, keyed by node type, that make up
  *   the default values of the checkboxes.
- * @param $theme_key
- *   String identifying the theme.
+ * @param $target_block_field_selector
+ *   String containing the selector of the target block select field whose value
+ *   determines whether the fieldset is visible/required.
  *
  * @return array
  *   Associative array of a fieldset.
@@ -1319,10 +1439,9 @@ function _block_in_block_get_blocks_in_theme_region($theme_key, $region_key, $bl
  * @see block_in_block_form_block_admin_configure_alter()
  * @see _block_in_block_get_node_type_view_mode_fields()
  */
-function _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_node_type, $theme_key) {
+function _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_node_type, $target_block_field_selector) {
   // Only show the fields for node types and view modes if the target block for
   // the given theme is the Main page content.
-  $target_block_selector = 'select[name="block_in_block_target_blocks[themes][' . $theme_key . '][block_key]"]';
   $fieldset = array(
     '#type' => 'fieldset',
     '#title' => t('Content Types<span class="form-required">*</span>'),
@@ -1330,10 +1449,10 @@ function _block_in_block_get_node_types_fieldset($form, $default_view_modes_by_n
     '#attributes' => array('class' => array('block-in-block-fieldset')),
     '#states' => array(
       'required' => array(
-        $target_block_selector => array('value' => BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY),
+        $target_block_field_selector => array('value' => BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY),
       ),
       'visible' => array(
-        $target_block_selector => array('value' => BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY),
+        $target_block_field_selector => array('value' => BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY),
       ),
     ),
   );
@@ -1414,7 +1533,7 @@ function _block_in_block_get_node_type_view_mode_fields($node_type_name, $defaul
  * Returns an array of view modes to use as the options element of a form field.
  *
  * @return array
- * Associative array of view mode names keyed by their machine name.
+ *   Associative array of view mode names keyed by their machine name.
  */
 function _block_in_block_get_view_modes_options_array() {
   $view_mode_options = &drupal_static(__FUNCTION__);
@@ -1538,10 +1657,69 @@ function _block_in_block_get_occurrences_textfield($default_occurrences) {
 function _block_in_block_form_block_admin_configure_validate($form, &$form_state) {
   $enabled = $form_state['values']['block_in_block_enabled'];
   if ($enabled) {
-    _block_in_block_form_validate_target_blocks($form_state);
-    _block_in_block_form_validate_target_substring($form_state);
-    _block_in_block_form_validate_occurrences($form_state);
+    $has_region_changed = _block_in_block_has_region_changed($form, $form_state);
+    if ($has_region_changed === FALSE) {
+      _block_in_block_form_validate_target_blocks($form_state);
+      _block_in_block_form_validate_target_substring($form_state);
+      _block_in_block_form_validate_occurrences($form_state);
+    }
+    elseif ($has_region_changed === -1) {
+      // Block is not assigned to any region.
+      $form_state['values']['block_in_block_enabled'] = 0;
+      $form_state['values']['block_in_block_target_blocks']['themes'] = array();
+      $warning_message = t('The block was configured to be inserted into another block, but since it is not assigned to a region its insertion settings have been disabled.');
+      drupal_set_message($warning_message, 'warning');
+    }
+    else {
+      $error_message = t('The block is configured to be inserted into another block, but the region it was placed in has changed. Please select a block to insert this one into, or disable it from being inserted.');
+      form_set_error('block_in_block_target_blocks_region_changed', $error_message);
+    }
   }
+}
+
+/**
+ * Determines if a region the block was assigned to has changed.
+ *
+ * @param $form
+ *   Array of form elements.
+ * @param $form_state
+ *   Array of metadata about state of form processing.
+ *
+ * @return bool|int
+ *   TRUE if the block is assigned to a new region, FALSE if it hasn't, and
+ *   -1 if the block is not assigned to any region.
+ */
+function _block_in_block_has_region_changed($form, &$form_state) {
+  $region_changed = FALSE;
+  $submitted_values = $form_state['input'];
+  if (isset($form_state['values'])) {
+    $submitted_values = $form_state['values'];
+  }
+  if ($submitted_values) {
+    $is_region_selected = FALSE;
+    foreach ($submitted_values['regions'] as $theme => $region) {
+      $empty_region_value = $form['regions'][$theme]['#empty_value'];
+      if ($region == $empty_region_value) {
+        // Region was selected, but now no region is selected.
+        if (isset($submitted_values['block_in_block_target_blocks']['themes'][$theme]['regions'])) {
+          $region_changed = TRUE;
+        }
+      }
+      else {
+        $is_region_selected = TRUE;
+        // Check if the current region is the same as the previous one.
+        if (!isset($submitted_values['block_in_block_target_blocks']['themes'][$theme]['regions'][$region])) {
+          // A new region has been selected.
+          $region_changed = TRUE;
+        }
+      }
+    }
+    if (!$is_region_selected) {
+      // No regions are selected.
+      $region_changed = -1;
+    }
+  }
+  return $region_changed;
 }
 
 /**
@@ -1555,14 +1733,17 @@ function _block_in_block_form_block_admin_configure_validate($form, &$form_state
  * @see _block_in_block_form_block_admin_configure_validate()
  */
 function _block_in_block_form_validate_target_blocks($form_state) {
-  $target_blocks_by_theme = $form_state['values']['block_in_block_target_blocks'];
   $target_block_is_selected = FALSE;
-  if ($target_blocks_by_theme) {
-    foreach ($target_blocks_by_theme['themes'] as $theme_key => $target_details) {
-      if ($target_details['block_key']) {
-        $target_block_is_selected = TRUE;
-        if ($target_details['block_key'] == BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY) {
-          _block_in_block_form_validate_view_modes($target_details['node_types'], $theme_key);
+  if (isset($form_state['values']['block_in_block_target_blocks'])) {
+    $target_blocks_by_theme = $form_state['values']['block_in_block_target_blocks'];
+    foreach ($target_blocks_by_theme['themes'] as $theme_key => $theme_details) {
+      foreach ($theme_details['regions'] as $region_key => $region_details) {
+        if ($region_details['block_key']) {
+          $target_block_is_selected = TRUE;
+          if ($region_details['block_key'] == BLOCK_IN_BLOCK_MAIN_PAGE_CONTENT_KEY) {
+            $theme_region_fieldset_selector = 'block_in_block_target_blocks][themes][' . $theme_key . '][regions][' . $region_key;
+            _block_in_block_form_validate_view_modes($region_details['node_types'], $theme_region_fieldset_selector);
+          }
         }
       }
     }
@@ -1577,14 +1758,18 @@ function _block_in_block_form_validate_target_blocks($form_state) {
 /**
  * Form Validation handler for view mode fields.
  *
- * Files a form error if there isn't at least one view mode selected.
+ * Files a form error if there isn't at least one view mode selected. Should
+ * be called if the block being inserted into is the Main page content block.
  *
  * @param $view_modes_by_node_type
  *   Associative array of metadata about the state of view mode fields.
+ * @param $theme_region_fieldset_selector
+ *   String of the selector of the parent fieldset the view modes are contained
+ *   in. Used to set the element that the error is set on if validation fails.
  *
  * @see _block_in_block_form_block_admin_configure_validate()
  */
-function _block_in_block_form_validate_view_modes($view_modes_by_node_type, $theme_key) {
+function _block_in_block_form_validate_view_modes($view_modes_by_node_type, $theme_region_fieldset_selector) {
   $view_mode_is_selected = FALSE;
   if ($view_modes_by_node_type) {
     foreach ($view_modes_by_node_type as $node_type) {
@@ -1602,7 +1787,7 @@ function _block_in_block_form_validate_view_modes($view_modes_by_node_type, $the
 
   if (!$view_mode_is_selected) {
     $error_message = t("At least one content type's view mode is required to be checked when inserting a block within the Main page content.");
-    form_set_error('block_in_block_target_blocks][themes][' . $theme_key . '][node_types', $error_message);
+    form_set_error($theme_region_fieldset_selector . '][node_types', $error_message);
   }
 }
 
@@ -1797,11 +1982,16 @@ function block_in_block_form_block_admin_configure_submit($form, &$form_state) {
     ->condition('module', $form_state['values']['module'])
     ->condition('delta', $form_state['values']['delta'])
     ->execute();
+
+  $target_blocks_value = array();
+  if (isset($form_state['values']['block_in_block_target_blocks']['themes'])) {
+    $target_blocks_value = $form_state['values']['block_in_block_target_blocks']['themes'];
+  }
   $query = db_insert('block_in_block')->fields(array(
     'module' => $form_state['values']['module'],
     'delta' => $form_state['values']['delta'],
     'enabled' => $form_state['values']['block_in_block_enabled'],
-    'target_blocks' => json_encode($form_state['values']['block_in_block_target_blocks']['themes']),
+    'target_blocks' => json_encode($target_blocks_value),
     'target_substring' => $form_state['values']['block_in_block_target_substring'],
     'insertion_type' => $form_state['values']['block_in_block_insertion_type'],
     'occurrences' => $form_state['values']['block_in_block_occurrences'],
@@ -1825,8 +2015,9 @@ function block_in_block_form_block_admin_display_form_alter(&$form, &$form_state
   $theme = $form['edited_theme']['#value'];
   foreach ($blocks_being_inserted as $block_key => $settings) {
     if (isset($form['blocks'][$block_key])) {
-      if ($settings['enabled'] == TRUE && !empty($settings['target_blocks'][$theme]['block_key'])) {
-        $target_block_key = $settings['target_blocks'][$theme]['block_key'];
+      $region_key = $form['blocks'][$block_key]['region']['#default_value'];
+      if ($settings['enabled'] == TRUE && !empty($settings['target_blocks'][$theme]['regions'][$region_key]['block_key'])) {
+        $target_block_key = $settings['target_blocks'][$theme]['regions'][$region_key]['block_key'];
         if (isset($form['blocks'][$target_block_key])) {
           $target_block_name = $form['blocks'][$target_block_key]['info']['#markup'];
           if (strlen($target_block_name) > 20) {
