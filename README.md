@@ -1,6 +1,13 @@
 Block in block
 ==============
 
+⚠️ REPOSITORY MOVED ⚠️
+----------------
+
+**This repository has been moved. For the latest revisions visit the module's
+project page on Drupal's GitLab:
+<https://git.drupalcode.org/project/block_in_block>**
+
 CONTENTS OF THIS FILE
 ---------------------
 
